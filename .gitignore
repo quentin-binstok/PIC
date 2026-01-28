@@ -2,3 +2,6 @@ CMakeCache.txt
 *.cmake
 Makefile
 CMakeFiles
+build/
+*.out
+*.txt

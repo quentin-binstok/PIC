@@ -26,8 +26,21 @@ ENDIF()
 # increase warning level
 INCLUDE(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-Wall" WALL)
+CHECK_CXX_COMPILER_FLAG("-Wextra" WEXTRA)
+CHECK_CXX_COMPILER_FLAG("-Werror" WERROR)
+CHECK_CXX_COMPILER_FLAG("-Wpedantic" WPEDANDIC)
+
 IF(WALL)
     ADD_COMPILE_OPTIONS(-Wall)
+ENDIF()
+IF(WEXTRA)
+    ADD_COMPILE_OPTIONS(-Wextra)
+ENDIF()
+IF(WERROR)
+    ADD_COMPILE_OPTIONS(-Werror)
+ENDIF()
+IF(WPEDANTIC)
+    ADD_COMPILE_OPTIONS(-Wpedantic)
 ENDIF()
 
 # find OpenMP
@@ -41,7 +54,7 @@ ENDIF()
 # ------------------------------------------------------------------------------
 
 FILE(GLOB SRCS src/*.cpp)
-ADD_EXECUTABLE(solver ${SRCS})
+ADD_EXECUTABLE(solver.out ${SRCS})
 IF(OpenMP_CXX_FOUND)
-    TARGET_LINK_LIBRARIES(solver PUBLIC OpenMP::OpenMP_CXX)
+    TARGET_LINK_LIBRARIES(solver.out PUBLIC OpenMP::OpenMP_CXX)
 ENDIF()
