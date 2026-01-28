@@ -5,3 +5,4 @@ CMakeFiles
 build/
 *.out
 *.txt
+.cache/

@@ -7,6 +7,8 @@
 #include <omp.h>
 #endif
 #include "nlohmann/json.hpp"
+#include "data.hpp"
+#include "utils.hpp"
 using json = nlohmann::json;
 
 int main(int argc, char **argv)
@@ -25,30 +27,30 @@ int main(int argc, char **argv)
     // Open log file as write and append
     std::ofstream log_file (data["log_file"], std::ios::out | std::ios::app);
     if (!log_file.is_open()) {
-        std::cerr << "Could not open the log file: " << data["log_file"] << std::endl;
+        std::cerr << "Could not open the log file: " << data["log_file"] << "\n";
         return EXIT_FAILURE;
     }
 
     // Starting log file
     time_t timestamp;
     time(&timestamp);
-    log_file << "STARTING SIMULATION" << std::endl;
-    log_file << "[INFO]" << ctime(&timestamp) << std::endl;
+    LOG_INFO(log_file, "STARTING SIMULATION");
+    LOG_INFO(log_file, "Date: " << ctime(&timestamp));
  
     // OMP log
 #ifdef _OPENMP
-    log_file << "[INFO] OpenMP available: OMP_NUM_THREADS=" << omp_get_max_threads() << "\n";
+    LOG_INFO(log_file, "OpenMP available: OMP_NUM_THREADS=" << omp_get_max_threads());
 #else
-    log_file << "[INFO] OpenMP not available.\n";
+    LOG_INFO(log_file, "OpenMP not available.");
 #endif
 
     // Debug log
 #ifdef NDEBUG
     // code has been configured with "cmake -DCMAKE_BUILD_TYPE=Release .."
-    log_file << "[INFO] code built in RELEASE mode.\n";
+    LOG_INFO(log_file, "Code built in RELEASE mode.");
 #else
     // code has been configured with "cmake .."
-    log_file << "[INFO] code built in DEBUG mode.\n";
+    LOG_INFO(log_file, "Code built in DEBUG mode.");
 #endif
     
     return EXIT_SUCCESS;
