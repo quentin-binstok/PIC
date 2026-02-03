@@ -11,6 +11,7 @@ typedef struct _scalar_field {
 } scalar_field;
 
 typedef struct _particle_field {
+    std::string name;
     int N;
     float *xyz; // soit 2D soit 3D, each particle's position aligned
     float *velocity; // idem

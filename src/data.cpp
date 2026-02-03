@@ -111,33 +111,29 @@ int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
 }
 
 // Made by chatgpt because making it ourselves is not interesting
-int write_particles_vtp(const char *name,
-                        int step,
-                        int rank,
-                        int N,
-                        const float *xyz,
-                        const float *velocity,
-                        const int   *id, 
+int write_particles_vtp(const particle_field* field,
+                        const int step,
+                        const int rank,
                       const int ndim, std::iostream log_file)
 {
     char out[512];
-    sprintf(out, "data/%s_rank%d_%d.vtp", name, rank, step);
+    sprintf(out, "data/%s_rank%d_%d.vtp", field->name.c_str(), rank, step);
 
     FILE *fp = fopen(out, "wb");
     if (!fp) return 1;
 
     /* ---- sizes ---- */
-    uint64_t bytes_points = (uint64_t)(3 * N * sizeof(float));
-    uint64_t bytes_vel    = velocity ? (uint64_t)(ndim * N * sizeof(float)) : 0;
-    uint64_t bytes_id     = id       ? (uint64_t)(N * sizeof(int))       : 0;
-    uint64_t bytes_conn   = (uint64_t)(N * sizeof(int));
-    uint64_t bytes_off    = (uint64_t)(N * sizeof(int));
+    uint64_t bytes_points = (uint64_t)(3 * field->N * sizeof(float));
+    uint64_t bytes_vel    = field->velocity ? (uint64_t)(ndim * field->N * sizeof(float)) : 0;
+    uint64_t bytes_id     = field->id       ? (uint64_t)(field->N * sizeof(int))       : 0;
+    uint64_t bytes_conn   = (uint64_t)(field->N * sizeof(int));
+    uint64_t bytes_off    = (uint64_t)(field->N * sizeof(int));
 
     /* ---- offsets into appended section ---- */
     uint64_t off_points = 0;
     uint64_t off_vel    = off_points + sizeof(uint64_t) + bytes_points;
-    uint64_t off_id     = off_vel    + (velocity ? sizeof(uint64_t) + bytes_vel : 0);
-    uint64_t off_conn   = off_id     + (id       ? sizeof(uint64_t) + bytes_id  : 0);
+    uint64_t off_id     = off_vel    + (field->velocity ? sizeof(uint64_t) + bytes_vel : 0);
+    uint64_t off_conn   = off_id     + (field->id       ? sizeof(uint64_t) + bytes_id  : 0);
     uint64_t off_off    = off_conn   + sizeof(uint64_t) + bytes_conn;
 
     /* ---- XML header ---- */
@@ -152,16 +148,16 @@ int write_particles_vtp(const char *name,
         "Name=\"Points\" format=\"appended\" offset=\"%llu\"/>\n"
         "      </Points>\n"
         "      <PointData>\n",
-        N, N, (unsigned long long)off_points);
+        field->N, field->N, (unsigned long long)off_points);
 
-    if (velocity) {
+    if (field->velocity) {
         fprintf(fp,
         "        <DataArray type=\"Float32\" Name=\"velocity\" "
         "NumberOfComponents=\"%d\" format=\"appended\" offset=\"%llu\"/>\n", ndim,
         (unsigned long long)off_vel);
     }
 
-    if (id) {
+    if (field->id) {
         fprintf(fp,
         "        <DataArray type=\"Int32\" Name=\"id\" "
         "format=\"appended\" offset=\"%llu\"/>\n",
@@ -187,11 +183,11 @@ int write_particles_vtp(const char *name,
     /* points */
     fwrite(&bytes_points, sizeof(uint64_t), 1, fp);
     if (ndim == 3)
-      fwrite(xyz, sizeof(float), ndim * N, fp);
+      fwrite(field->xyz, sizeof(float), ndim * field->N, fp);
     else if (ndim == 2) {
       float zero = 0;
-      for (int i = 0; i < N; i++) {
-        fwrite(&xyz[2 * i], sizeof(float), 2, fp);
+      for (int i = 0; i < field->N; i++) {
+        fwrite(&(field->xyz)[2 * i], sizeof(float), 2, fp);
         fwrite(&zero, sizeof(float), 1, fp);
       }
     } else {
@@ -201,25 +197,25 @@ int write_particles_vtp(const char *name,
     }
 
     /* velocity */
-    if (velocity) {
+    if (field->velocity) {
         fwrite(&bytes_vel, sizeof(uint64_t), 1, fp);
-        fwrite(velocity, sizeof(float), ndim * N, fp);
+        fwrite(field->velocity, sizeof(float), ndim * field->N, fp);
     }
 
     /* id */
-    if (id) {
+    if (field->id) {
         fwrite(&bytes_id, sizeof(uint64_t), 1, fp);
-        fwrite(id, sizeof(int), N, fp);
+        fwrite(field->id, sizeof(int), field->N, fp);
     }
 
     /* connectivity: 0,1,2,...,N-1 */
     fwrite(&bytes_conn, sizeof(uint64_t), 1, fp);
-    for (int i = 0; i < N; i++)
+    for (int i = 0; i < field->N; i++)
         fwrite(&i, sizeof(int), 1, fp);
 
     /* offsets: 1,2,3,...,N */
     fwrite(&bytes_off, sizeof(uint64_t), 1, fp);
-    for (int i = 1; i <= N; i++)
+    for (int i = 1; i <= field->N; i++)
         fwrite(&i, sizeof(int), 1, fp);
 
     fprintf(fp,
