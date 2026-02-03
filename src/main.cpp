@@ -1,3 +1,4 @@
+#include "test.hpp"
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
@@ -52,6 +53,8 @@ int main(int argc, char **argv)
     // code has been configured with "cmake .."
     LOG_INFO(log_file, "Code built in DEBUG mode.");
 #endif
+
+    test_vtp(log_file);
     
     return EXIT_SUCCESS;
 }

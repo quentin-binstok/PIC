@@ -19,17 +19,12 @@ typedef struct _particle_field {
 } particle_field;
 
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
-                       int numranks, std::iostream log_file);
+                       int numranks, bool vtp, std::ofstream& log_file);
 
-int write_data_vtk(scalar_field *data, int step, int rank, bool vtp, std::ostream log_file);
+int write_data_vtk(scalar_field *data, int step, int rank, bool vtp, std::ofstream& log_file);
 
-int write_particles_vtp(const char *name,
-                        int step,
-                        int rank,
-                        int N,
-                        const float *xyz,
-                        const float *velocity,
-                        const int   *id, 
-                      const int ndim, std::iostream log_file);
-
+int write_particles_vtp(const particle_field* field,
+                        const int step,
+                        const int rank,
+                      const int ndim, std::ofstream& log_file);
 #endif

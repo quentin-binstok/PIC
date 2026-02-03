@@ -1,12 +1,12 @@
 #include <cstdlib>
 #include <istream>
-#include <ostream>
+#include <fstream>
 #include <string>
 #include <cinttypes>
 #include "data.hpp"
 #include "utils.hpp"
 
-int write_data_vtk(scalar_field *data, int step, int rank, std::ostream log_file) {
+int write_data_vtk(scalar_field *data, int step, int rank, std::ofstream& log_file) {
   char out[512];
   if (data->name.size() > 256) {
     LOG_ERR(log_file, "Error: data name too long for output VTK file");
@@ -64,7 +64,7 @@ int write_data_vtk(scalar_field *data, int step, int rank, std::ostream log_file
 }
 
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
-                       int numranks, bool vtp, std::iostream log_file) {
+                       int numranks, bool vtp, std::ofstream& log_file) {
   char out[512];
   if (name.size() > 256) {
     LOG_ERR(log_file, "Error: name too long for Paraview manifest file");
@@ -114,7 +114,7 @@ int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
 int write_particles_vtp(const particle_field* field,
                         const int step,
                         const int rank,
-                      const int ndim, std::iostream log_file)
+                      const int ndim, std::ofstream& log_file)
 {
     char out[512];
     sprintf(out, "data/%s_rank%d_%d.vtp", field->name.c_str(), rank, step);

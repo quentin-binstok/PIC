@@ -2,6 +2,10 @@
 
 executable="solver.out"
 build_dir="build"
+data_dir="data"
+
+rm -r $data_dir
+mkdir -p $data_dir
 
 if [[ $1 == "clean" || $1 == "clean_build" ]]; then
     rm -r $build_dir 
