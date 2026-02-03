@@ -10,6 +10,13 @@ typedef struct _scalar_field {
     float *values;
 } scalar_field;
 
+typedef struct _particle_field {
+    int N;
+    float *xyz; // soit 2D soit 3D, each particle's position aligned
+    float *velocity; // idem
+    int *id;
+} particle_field;
+
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
                        int numranks, std::iostream log_file);
 

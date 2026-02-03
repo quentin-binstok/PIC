@@ -4,5 +4,19 @@
 	"o": [0.0, 0.0, 0.0],
 	"L": [1.0, 2.0, 3.0],
 
-	"log_file": "log.txt"
+	"log_file": "log.txt",
+	"bc": [
+		{
+			"start": [0, 0],
+			"end": [2, 0],
+			"type": "border or open",
+			"speed": 0.5,
+			"pressure": 6
+		},
+		{
+			"start": [2, 0],
+			"end": [2, 2],
+			"type": "border or open"
+		}
+	]
 }
