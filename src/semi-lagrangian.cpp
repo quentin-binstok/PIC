@@ -1,13 +1,14 @@
-#include <array>
+#include "conditions.hpp"
+#include "data.hpp"
+#include "nlohmann/json.hpp"
+#include "utils.hpp"
+
 #include <cstdlib>
 #include <fstream>
-#include "data.hpp"
-#include "utils.hpp"
-#include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
 
-int check_params(json& data, std::ofstream& log_file) {
+int check_params(json &data, std::ofstream &log_file) {
     LOG_INFO(log_file, "Checking the input parameters");
 
     // grid
@@ -23,7 +24,8 @@ int check_params(json& data, std::ofstream& log_file) {
         }
 
         if (data["grid"][0] <= 0 || data["grid"][1] <= 0) {
-            LOG_ERR(log_file, "Elements from \"grid\" cannot be zero or negative")
+            LOG_ERR(log_file,
+                    "Elements from \"grid\" cannot be zero or negative")
             return EXIT_FAILURE;
         }
     }
@@ -41,7 +43,8 @@ int check_params(json& data, std::ofstream& log_file) {
         }
 
         if (data["space_steps"][0] <= 0 || data["space_steps"][1] <= 0) {
-            LOG_ERR(log_file, "Elements from \"space_steps\" cannot be zero or negative")
+            LOG_ERR(log_file,
+                    "Elements from \"space_steps\" cannot be zero or negative")
             return EXIT_FAILURE;
         }
     }
@@ -49,7 +52,7 @@ int check_params(json& data, std::ofstream& log_file) {
     return EXIT_SUCCESS;
 }
 
-int solver_semi_lagrangian(json& data, std::ofstream& log_file) {
+int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     LOG_INFO(log_file, "Starting the semi-lagrangian solver");
 
     if (check_params(data, log_file)) {
@@ -61,14 +64,21 @@ int solver_semi_lagrangian(json& data, std::ofstream& log_file) {
     const unsigned int nx = data["grid"][0], ny = data["grid"][1];
     const float dx = data["space_steps"][0], dy = data["space_steps"][1];
 
-    scalar_field *vx = scalar_field_init("vx", nx + 1, ny, dx, dy,log_file);
-    scalar_field *vy = scalar_field_init("vy", nx, ny + 1, dx, dy,log_file);
-    scalar_field *p = scalar_field_init("p", nx, ny, dx, dy,log_file);
+    scalar_field *vx = scalar_field_init("vx", nx + 1, ny, dx, dy, log_file);
+    scalar_field *vy = scalar_field_init("vy", nx, ny + 1, dx, dy, log_file);
+    scalar_field *p = scalar_field_init("p", nx, ny, dx, dy, log_file);
     if (!vx || !vy || !p) {
         LOG_ERR(log_file, "An error occured initializing fields.");
         return EXIT_FAILURE;
     }
 
+    apply_initial_condition(vx, data, "ic_vx", log_file);
+    apply_initial_condition(vy, data, "ic_vy", log_file);
+    apply_initial_condition(p, data, "ic_p", log_file);
+
+    write_scalar_vtk(vx, 0, 0, log_file);
+    write_scalar_vtk(vy, 0, 0, log_file);
+    write_scalar_vtk(p, 0, 0, log_file);
 
     scalar_field_free(vx, log_file);
     scalar_field_free(vy, log_file);

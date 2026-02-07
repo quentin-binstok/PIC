@@ -9,3 +9,4 @@ build/
 *.pvd
 data/
 todo.md
+.clang-format

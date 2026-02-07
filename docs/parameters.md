@@ -69,4 +69,4 @@ The objects are to be as:
 }
 ```
 
-The `tl` parameter stands for "top-left", and the `br` stands for "bottom-right". They define the extend on which the initial condition applies. The `value` is a float.
+The `tl` parameter stands for "top-left", and the `br` stands for "bottom-right". They define the extend on which the initial condition applies. The bottom-right index is included in the setting of the values. The `value` is a float.
