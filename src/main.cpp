@@ -1,4 +1,4 @@
-#include "semiLagrangian.hpp"
+#include "test.hpp"
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
@@ -8,8 +8,11 @@
 #include <omp.h>
 #endif
 #include "nlohmann/json.hpp"
+
 #include "data.hpp"
 #include "utils.hpp"
+#include "semiLagrangian.hpp"
+
 using json = nlohmann::json;
 
 int main(int argc, char **argv)
@@ -26,9 +29,15 @@ int main(int argc, char **argv)
     json data = json::parse(inputf);
 
     // Open log file as write and append
-    std::ofstream log_file (data["log_file"], std::ios::out | std::ios::app);
+    std::string log_file_path;
+    if (data.contains("log_file") && data["log_file"].type() == json::value_t::string)
+        log_file_path = data["log_file"];
+    else
+        log_file_path = "log.txt";
+
+    std::ofstream log_file (log_file_path, std::ios::out | std::ios::app);
     if (!log_file.is_open()) {
-        std::cerr << "Could not open the log file: " << data["log_file"] << "\n";
+        std::cerr << "Could not open the log file: " << log_file_path << "\n";
         return EXIT_FAILURE;
     }
 
@@ -54,7 +63,21 @@ int main(int argc, char **argv)
     LOG_INFO(log_file, "Code built in DEBUG mode.");
 #endif
 
-    semiLagrangian(log_file);
-    
+    int ret = 0;
+    if (data["solver"] == "semi-lagrangian") {
+        ret = solver_semi_lagrangian(data, log_file);
+        
+    }
+    else {
+        LOG_ERR(log_file, "The specified solver is not supported.");
+        LOG_ERR(log_file, "Exiting.")
+        return EXIT_FAILURE;
+    }
+
+    if (ret == EXIT_FAILURE) {
+            LOG_ERR(log_file, "An error occured in the solver.");
+            return EXIT_FAILURE;
+        }
+
     return EXIT_SUCCESS;
 }

@@ -1,8 +1,8 @@
-#ifndef __SOLVER_TEST__
-#define __SOLVER_TEST__
 
+#ifndef __SOLVER_SEMI_LAGRANGIAN__
+#define __SOLVER_SEMI_LAGRANGIAN__
+#include "nlohmann/json.hpp"
 #include <fstream>
-
-void semiLagrangian(std::ofstream& log_file);
-
+using json = nlohmann::json;
+int solver_semi_lagrangian(json& data, std::ofstream& log_file);
 #endif

@@ -1,8 +1,8 @@
 {
-	"s": 0.05,
-	"nstepT": 5,
-	"o": [0.0, 0.0, 0.0],
-	"L": [1.0, 2.0, 3.0],
+	"solver": "semi-lagrangian",
+	"grid": [5, 5],
+	"space_steps": [0.1, 0.1],
+	"time_step": 0.01,
 
 	"log_file": "log.txt",
 	"bc": [
@@ -16,7 +16,28 @@
 		{
 			"start": [2, 0],
 			"end": [2, 2],
-			"type": "border or open"
+			"type": "closed or open"
+		}
+	],
+	"ic_vx": [
+		{
+			"tl": [0, 0],
+			"br": [5, 5],
+			"value": 1
+		}
+	],
+	"ic_vy": [
+		{
+			"tl": [0, 0],
+			"br": [5, 5],
+			"value": 2
+		}
+	],
+	"ic_p": [
+		{
+			"tl": [0, 0],
+			"br": [5, 5],
+			"value": 1
 		}
 	]
 }
