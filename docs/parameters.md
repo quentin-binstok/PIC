@@ -6,10 +6,22 @@ The available parameters can be grouped in several ways.
 
 ## General parameters
 
+### `solver`
+
+- Type: string
+- Role: defines the solver used
+
+This can only be `"semi-lagangian"` for now.
+
 ### `grid`
 
 - Type: array of 2 ints
 - Role: defines the size of the rectangular grid. Is the number of nodes.
+
+### `space_steps`
+
+- Type: array of 2 floats
+- Role: defines the spatial steps.
 
 ### `log_file`
 

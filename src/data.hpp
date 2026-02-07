@@ -18,6 +18,9 @@ typedef struct _particle_field {
     int *id;
 } particle_field;
 
+scalar_field *scalar_field_init(const std::string name, const unsigned int nx, const unsigned int ny, const float dx, const float dy, std::ofstream& log_file);
+void scalar_field_free(scalar_field *field, std::ofstream& log_file);
+
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
                        int numranks, bool vtp, std::ofstream& log_file);
 

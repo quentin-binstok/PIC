@@ -1,10 +1,34 @@
+#include <cstdint>
 #include <cstdlib>
-#include <istream>
 #include <fstream>
 #include <string>
-#include <cinttypes>
 #include "data.hpp"
 #include "utils.hpp"
+
+scalar_field *scalar_field_init(const std::string name, const unsigned int nx, const unsigned int ny, const float dx, const float dy, std::ofstream& log_file) {
+  LOG_INFO(log_file, "Initializing scalar field " << name);
+  scalar_field *field = new scalar_field;
+  
+  field->name = name;
+  field->nx = nx;
+  field->ny = ny;
+  field->dx = dx;
+  field->dy = dy;
+
+  field->values = (float*)calloc(nx * ny, sizeof(float));
+  if (!field->values) {
+    LOG_ERR(log_file, "Failed to allocate memory for scalar field " << name << ", exiting.");
+    return NULL;
+  }
+  
+  return field;
+}
+
+void scalar_field_free(scalar_field *field, std::ofstream& log_file) {
+  LOG_INFO(log_file, "Freeing scalar field " << field->name);
+  free(field->values);
+  free(field);
+}
 
 int write_data_vtk(scalar_field *data, int step, int rank, std::ofstream& log_file) {
   char out[512];

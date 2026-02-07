@@ -8,7 +8,7 @@ void test_vtp(std::ofstream& log_file) {
 
     particle_field field;
     field.name = "test_field";
-    field.N = 5;
+    field.N = 500;
 
     LOG_INFO(log_file, "Allocating field");
 
@@ -46,6 +46,11 @@ void test_vtp(std::ofstream& log_file) {
 
     write_manifest_vtk(field.name, (double)1, steps, 1, 1, true, log_file);
 
-    LOG_INFO(log_file, "End of test");
+    LOG_INFO(log_file, "End of test, freeing");
+
+    free(field.xyz);
+    free(field.velocity);
+    free(field.id);
+
     return;
 }
