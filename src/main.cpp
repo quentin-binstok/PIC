@@ -1,4 +1,4 @@
-#include "test.hpp"
+#include "semiLagrangian.hpp"
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
@@ -54,7 +54,7 @@ int main(int argc, char **argv)
     LOG_INFO(log_file, "Code built in DEBUG mode.");
 #endif
 
-    test_vtp(log_file);
+    semiLagrangian(log_file);
     
     return EXIT_SUCCESS;
 }

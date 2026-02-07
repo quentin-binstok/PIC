@@ -21,10 +21,11 @@ typedef struct _particle_field {
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
                        int numranks, bool vtp, std::ofstream& log_file);
 
-int write_data_vtk(scalar_field *data, int step, int rank, bool vtp, std::ofstream& log_file);
+int write_data_vtk(scalar_field *data, int step, int rank, std::ofstream& log_file);
 
 int write_particles_vtp(const particle_field* field,
                         const int step,
                         const int rank,
                       const int ndim, std::ofstream& log_file);
+
 #endif
