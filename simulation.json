@@ -1,7 +1,7 @@
 {
 	"solver": "semi-lagrangian",
 	"grid": [5, 5],
-	"space_steps": [0.1, 0.1],
+	"space_steps": 0.1,
 
 	"log_file": "log.txt",
 	"bc": [

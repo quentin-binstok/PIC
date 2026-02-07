@@ -7,7 +7,7 @@
 
 scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
                                 const unsigned int ny, const float dx,
-                                const float dy, std::ofstream &log_file) {
+                                std::ofstream &log_file) {
     LOG_INFO(log_file, "Initializing scalar field " << name);
     scalar_field *field = new scalar_field;
 
@@ -15,7 +15,6 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
     field->nx = nx;
     field->ny = ny;
     field->dx = dx;
-    field->dy = dy;
 
     field->values = (float *)calloc(nx * ny, sizeof(float));
     if (!field->values) {
@@ -77,7 +76,7 @@ int write_scalar_vtk(scalar_field *data, int step, int rank,
             "    </Piece>\n"
             "  </ImageData>\n"
             "  <AppendedData encoding=\"raw\">\n_",
-            data->nx - 1, data->ny - 1, 0, data->dx, data->dy, 0., 0., 0., 0.,
+            data->nx - 1, data->ny - 1, 0, data->dx, data->dx, 0., 0., 0., 0.,
             data->nx - 1, data->ny - 1, 0, data->name.c_str());
 
     fwrite(&num_bytes, sizeof(uint64_t), 1, fp);
