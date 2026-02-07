@@ -5,6 +5,13 @@
 #include <fstream>
 #include <string>
 
+/*
+ @brief Initialises a scalar field
+ @param name: the name, useful when writing files
+ @param nx, ny: the extend of the grid
+ @param dx: the step
+ @param log_file: the log file
+*/
 scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
                                 const unsigned int ny, const float dx,
                                 std::ofstream &log_file) {
@@ -16,6 +23,7 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
     field->ny = ny;
     field->dx = dx;
 
+    // Initialises the array to zero
     field->values = (float *)calloc(nx * ny, sizeof(float));
     if (!field->values) {
         LOG_ERR(log_file, "Failed to allocate memory for scalar field "
@@ -26,12 +34,18 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
     return field;
 }
 
+/*
+ @brief Frees a scalar field
+ @param field: the field
+ @param log_file: the log file
+*/
 void scalar_field_free(scalar_field *field, std::ofstream &log_file) {
     LOG_INFO(log_file, "Freeing scalar field " << field->name);
     free(field->values);
     free(field);
 }
 
+// Write the scalar field to a paraview file
 int write_scalar_vtk(scalar_field *data, int step, int rank,
                      std::ofstream &log_file) {
     char out[512];
@@ -90,6 +104,7 @@ int write_scalar_vtk(scalar_field *data, int step, int rank,
     return 0;
 }
 
+// Writes the manifest file, use the vtp param to say if it's a vtk or vtp
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
                        int numranks, bool vtp, std::ofstream &log_file) {
     char out[512];

@@ -3,7 +3,8 @@
 #include "utils.hpp"
 #include <fstream>
 
-void test_vtp(std::ofstream& log_file) {
+// Just to test the writing to vtp files
+void test_vtp(std::ofstream &log_file) {
     LOG_INFO(log_file, "Starting particle test")
 
     particle_field field;
@@ -12,9 +13,9 @@ void test_vtp(std::ofstream& log_file) {
 
     LOG_INFO(log_file, "Allocating field");
 
-    field.xyz = (float*)calloc(field.N, 2 * sizeof(float));
-    field.velocity = (float*)calloc(field.N, 2 * sizeof(float));
-    field.id = (int*)calloc(field.N, sizeof(int));
+    field.xyz = (float *)calloc(field.N, 2 * sizeof(float));
+    field.velocity = (float *)calloc(field.N, 2 * sizeof(float));
+    field.id = (int *)calloc(field.N, sizeof(int));
 
     LOG_INFO(log_file, "Setting 0 values");
     for (int i = 0; i < field.N; i++) {
@@ -33,7 +34,7 @@ void test_vtp(std::ofstream& log_file) {
     LOG_INFO(log_file, "starting iterations");
     int steps = 6;
     for (int i = 1; i < steps; i++) {
-        for (int j = 0; j < field.N; j++){
+        for (int j = 0; j < field.N; j++) {
             field.xyz[2 * j] += field.velocity[2 * j];
             field.xyz[2 * j + 1] += field.velocity[2 * j + 1];
 

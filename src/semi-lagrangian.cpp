@@ -8,6 +8,12 @@
 
 using json = nlohmann::json;
 
+/*
+ @brief checks the validity of parameters (except boundary and initial
+ conditions)
+ @param data: the whole data json
+ @param log_file: the log file
+*/
 int check_params(json &data, std::ofstream &log_file) {
     LOG_INFO(log_file, "Checking the input parameters");
 
@@ -46,6 +52,11 @@ int check_params(json &data, std::ofstream &log_file) {
     return EXIT_SUCCESS;
 }
 
+/*
+ @brief the semi lagrangian solver
+ @param data: the whole json
+ @param log_file: the log file
+*/
 int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     LOG_INFO(log_file, "Starting the semi-lagrangian solver");
 
@@ -58,6 +69,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     const unsigned int nx = data["grid"][0], ny = data["grid"][1];
     const float dx = data["space_steps"];
 
+    // Initialising the fields
     scalar_field *vx = scalar_field_init("vx", nx + 1, ny, dx, log_file);
     scalar_field *vy = scalar_field_init("vy", nx, ny + 1, dx, log_file);
     scalar_field *p = scalar_field_init("p", nx, ny, dx, log_file);
@@ -66,14 +78,17 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
         return EXIT_FAILURE;
     }
 
+    // Applying the initial conditions
     apply_initial_condition(vx, data, "ic_vx", log_file);
     apply_initial_condition(vy, data, "ic_vy", log_file);
     apply_initial_condition(p, data, "ic_p", log_file);
 
+    // This is just to have a whole pipeline
     write_scalar_vtk(vx, 0, 0, log_file);
     write_scalar_vtk(vy, 0, 0, log_file);
     write_scalar_vtk(p, 0, 0, log_file);
 
+    // As we're not using objects, we need this
     scalar_field_free(vx, log_file);
     scalar_field_free(vy, log_file);
     scalar_field_free(p, log_file);
