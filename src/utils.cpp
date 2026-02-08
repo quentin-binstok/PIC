@@ -19,13 +19,11 @@ float bilinear_interpolate(float x, float y, int x1, int y1,
 
 int init_scalar_field(scalar_field* field, const std::string& name,
                       const int nx, const int ny,
-                      const double dx, const double dy,
-                      std::ofstream& log_file) {
+                      const double dx, std::ofstream& log_file) {
     field->name = name;
     field->nx = nx;
     field->ny = ny;
     field->dx = dx;
-    field->dy = dy;
 
     field->values = (float*)calloc(field->nx * field->ny, sizeof(float));
     if (!field->values) {

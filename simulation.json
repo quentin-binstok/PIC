@@ -1,9 +1,8 @@
+
 {
 	"solver": "semi-lagrangian",
 	"grid": [5, 5],
-	"space_steps": [0.1, 0.1],
-	"time_step": 0.01,
-
+	"space_steps": 0.1,
 	"log_file": "log.txt",
 	"bc": [
 		{
@@ -22,21 +21,21 @@
 	"ic_vx": [
 		{
 			"tl": [0, 0],
-			"br": [5, 5],
+			"br": [4, 4],
 			"value": 1
 		}
 	],
 	"ic_vy": [
 		{
 			"tl": [0, 0],
-			"br": [5, 5],
+			"br": [4, 4],
 			"value": 2
 		}
 	],
 	"ic_p": [
 		{
 			"tl": [0, 0],
-			"br": [5, 5],
+			"br": [4, 4],
 			"value": 1
 		}
 	]
