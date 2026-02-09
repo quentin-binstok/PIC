@@ -1,35 +1,22 @@
-#include <cstdlib>
-#include <istream>
-#include <fstream>
-#include <string>
-#include <cinttypes>
-#include "data.hpp"
+
 #include "utils.hpp"
-
-float bilinear_interpolate(float x, float y, int x1, int y1,
-                           float Q11, float Q12, float Q21, float Q22, 
-                           float Dx, float Dy) {
-    // x1, y1 is the bottom-left corner, Q are the values at the corners, Dx and Dy are the cell sizes
-    float x2 = x1 + Dx;
-    float y2 = y1 + Dy;
-    float fxy1 = ((x2 - x) / (Dx)) * Q11 + ((x - x1) / (Dx)) * Q21;
-    float fxy2 = ((x2 - x) / (Dx)) * Q12 + ((x - x1) / (Dx)) * Q22;
-    return ((y2 - y) / (Dy)) * fxy1 + ((y - y1) / (Dy)) * fxy2;
+#include <ostream>
+float interpolate_bilinear(float x, float y, float x1, float y1, float q11,
+                           float q21, float q12, float q22, float Dx, float Dy,
+                           std::ofstream &log_file) {
+    // x1,y1 is the bottom-left corner of the cell, Dx and Dy are the cell sizes
+    // q11, q21, q12, q22 are the values at the corners (11 is bottom-left)
+    LOG_INFO(log_file, "Interpolating at (" << x << " ; " << y
+                                            << "), with x1 = " << x1
+                                            << " and y1 = " << y1);
+    LOG_INFO(log_file, "values are q11 = " << q11 << ", q21 = " << q21
+                                           << ", q12 = " << q12
+                                           << ", q22 = " << q22);
+    float dx = x - x1;
+    float dy = y - y1;
+    float value = (1 - (dx / Dx) - (dy / Dy) + ((dx * dy) / (Dx * Dy))) * q11 +
+                  (dx / Dx - ((dx * dy) / (Dx * Dy))) * q21 +
+                  (dy / Dy - ((dx * dy) / (Dx * Dy))) * q12 +
+                  ((dx * dy) / (Dx * Dy)) * q22;
+    return value;
 }
-
-int init_scalar_field(scalar_field* field, const std::string& name,
-                      const int nx, const int ny,
-                      const double dx, std::ofstream& log_file) {
-    field->name = name;
-    field->nx = nx;
-    field->ny = ny;
-    field->dx = dx;
-
-    field->values = (float*)calloc(field->nx * field->ny, sizeof(float));
-    if (!field->values) {
-        LOG_ERR(log_file, "Could not allocate scalar field " << name);
-        return EXIT_FAILURE;
-    }
-    return EXIT_SUCCESS;
-}
-void free_data(scalar_field* field) { free(field->values);}

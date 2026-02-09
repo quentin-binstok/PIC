@@ -4,12 +4,28 @@
 #include <string>
 #define GET(data, i, j) ((data)->values[(data)->nx * (j) + (i)])
 #define SET(data, i, j, val) ((data)->values[(data)->nx * (j) + (i)] = (val))
+/*
+A structure to store scalar fields
+name: the name of the field
+nx, ny: the size of the grid
+dx: the step
+values: the array of values
+*/
 typedef struct _scalar_field {
     std::string name;
     int nx, ny;
+    float x_internal, y_internal;
     float dx;
     float *values;
 } scalar_field;
+/*
+A structure to store particles
+name: the name of the particle field
+N: the number of particles
+xyz: the array of particle positions
+velocity: the array of particle velocities
+id: the ids of the particles, to identify them in paraview
+*/
 typedef struct _particle_field {
     std::string name;
     int N;
@@ -17,9 +33,25 @@ typedef struct _particle_field {
     float *velocity; // idem
     int *id;
 } particle_field;
+/*
+ @brief Initialises a scalar field
+ @param name: the name, useful when writing files
+ @param nx, ny: the extend of the grid
+ @param x_internal, y_internal: the position of the field inside a single cell
+ @param dx: the step
+ @param log_file: the log file
+*/
 scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
-                                const unsigned int ny, const float dx,
+                                const unsigned int ny, const float x_internal,
+                                const float y_internal, const float dx,
                                 std::ofstream &log_file);
+scalar_field *scalar_field_copy(const scalar_field *field,
+                                std::ofstream &log_file);
+/*
+ @brief Frees a scalar field
+ @param field: the field
+ @param log_file: the log file
+*/
 void scalar_field_free(scalar_field *field, std::ofstream &log_file);
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
                        int numranks, bool vtp, std::ofstream &log_file);

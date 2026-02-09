@@ -2,12 +2,18 @@
 #include "data.hpp"
 #include "nlohmann/json.hpp"
 #include "utils.hpp"
-
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 
 using json = nlohmann::json;
 
+/*
+ @brief checks the validity of parameters (except boundary and initial
+ conditions)
+ @param data: the whole data json
+ @param log_file: the log file
+*/
 int check_params(json &data, std::ofstream &log_file) {
     LOG_INFO(log_file, "Checking the input parameters");
 
@@ -43,9 +49,230 @@ int check_params(json &data, std::ofstream &log_file) {
         }
     }
 
+    // Time
+    if (data.contains("nt")) {
+        if (data["nt"].type() != json::value_t::number_unsigned) {
+            LOG_ERR(log_file, "\"nt\" not provided as int");
+            return EXIT_FAILURE;
+        }
+
+        if (data["nt"] <= 0) {
+            LOG_ERR(log_file, "\"nt\" cannot be zero or negative");
+            return EXIT_FAILURE;
+        }
+    }
+
+    if (data.contains("delta_t")) {
+        if (data["delta_t"].type() != json::value_t::number_float) {
+            LOG_ERR(log_file, "\"delta_t\" not provided as float");
+            return EXIT_FAILURE;
+        }
+
+        if (data["delta_t"] <= 0) {
+            LOG_ERR(log_file, "\"delta_t\" cannot be zero or negative");
+            return EXIT_FAILURE;
+        }
+    }
+
     return EXIT_SUCCESS;
 }
 
+/*
+ @brief Applies semi-lagrangian advection to the field q
+ @param vx, vy: the velocity field
+ @param dt: the time step
+ @param q: the scalar field to advect.
+ @param log_file: the log file
+*/
+inline int advect(scalar_field *vx, scalar_field *vy, float dt,
+                  scalar_field *q_n, scalar_field *q_n1,
+                  std::ofstream &log_file) {
+    unsigned int nx = q_n->nx, ny = q_n->ny;
+    float x_int = q_n->x_internal, y_int = q_n->y_internal;
+    float dx = q_n->dx;
+
+    for (unsigned int j = 1; j < ny - 1; j++) {
+        for (unsigned int i = 1; i < nx - 1; i++) {
+            LOG_INFO(log_file,
+                     "Starting advection at (" << i << "," << j << ")");
+            /*
+            1. Interpolate speed field at the point
+            2. Get the xp
+            3. Replace the value (i need an intermediate field)
+            */
+
+            // Interpolation of the speed field
+
+            // coords where we need the speed field
+            float x = (i + x_int) * dx, y = (j + y_int) * dx;
+
+            // vx
+            float v_x;
+            int x_1, x_2, y_1, y_2;
+            if (y_int > 0) {
+                x_1 = (i - 1);
+                x_2 = (i);
+                y_1 = (j);
+                y_2 = (j + 1);
+            } else {
+                x_1 = (i - 1);
+                x_2 = (i);
+                y_1 = (j - 1);
+                y_2 = (j);
+            }
+
+            LOG_INFO(log_file, "Interpolating vx");
+            v_x = interpolate_bilinear(
+                x, y, (x_1 + vx->x_internal) * dx, (y_1 + vx->y_internal) * dx,
+                GET(vx, x_1, y_1), GET(vx, x_2, y_1), GET(vx, x_1, y_2),
+                GET(vx, x_2, y_2), dx, dx, log_file);
+            LOG_INFO(log_file, "vx = " << v_x);
+
+            // vy
+            float v_y;
+            if (x_int > 0) {
+                x_1 = (i);
+                x_2 = (i + 1);
+                y_1 = (j - 1);
+                y_2 = (j);
+            } else {
+                x_1 = (i - 1);
+                x_2 = (i);
+                y_1 = (j - 1);
+                y_2 = (j);
+            }
+
+            LOG_INFO(log_file, "Interpolating vy")
+            v_y = interpolate_bilinear(
+                x, y, (x_1 + vy->x_internal) * dx, (y_1 + vy->y_internal) * dx,
+                GET(vy, x_1, y_1), GET(vy, x_2, y_1), GET(vy, x_1, y_2),
+                GET(vy, x_2, y_2), dx, dx, log_file);
+            LOG_INFO(log_file, "vy = " << v_y);
+
+            // xp
+            float xp_x = x - dt * v_x;
+            float xp_y = y - dt * v_y;
+
+            LOG_INFO(log_file, "(xp_x, xp_y) " << xp_x << " " << xp_y);
+
+            int xp = (int)(((xp_x) / dx - 0.5) + 1);
+            int yp = (int)(((xp_y) / dx - 0.5) + 1);
+            LOG_INFO(log_file, "(xp, yp) " << xp << " " << yp);
+            float x_int_interp = (xp_x / dx) - xp;
+            float y_int_interp = (xp_y / dx) - yp;
+
+            // Get q at xp
+            // vx
+            float q_interp;
+            if (x_int_interp > x_int) {
+                x_1 = xp;
+                x_2 = xp + 1;
+            } else {
+                x_1 = xp - 1;
+                x_2 = xp;
+            }
+
+            if (y_int_interp > y_int) {
+                y_1 = yp;
+                y_2 = yp + 1;
+            } else {
+                y_1 = yp - 1;
+                y_2 = yp;
+            }
+
+            if (x_1 < 0 || y_1 < 0 || x_2 >= (int)nx || y_2 >= (int)nx)
+                continue;
+
+            LOG_INFO(log_file, "Interpolating q " << x_1 << x_2 << y_1 << y_2);
+            q_interp = interpolate_bilinear(
+                xp_x, xp_y, (x_1 + x_int) * dx, (y_1 + y_int) * dx,
+                GET(q_n, x_1, y_1), GET(q_n, x_2, y_1), GET(q_n, x_1, y_2),
+                GET(q_n, x_2, y_2), dx, dx, log_file);
+            LOG_INFO(log_file, "q_interp " << q_interp);
+
+            SET(q_n1, i, j, q_interp);
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
+void gauss_sidel(scalar_field *p, scalar_field *div, float dx, 
+                        float dt, std::ofstream &log_file) {
+
+    unsigned int nx = p->nx;
+    unsigned int ny = p->ny;
+    const float rho = 1.0f;
+    const float alpha = dx * dx * rho / dt;
+    float maxPdiff = 1.0f;
+
+    LOG_INFO(log_file, "Starting Gauss-Seidel solver");
+
+    while (maxPdiff > 1e-3) {
+        maxPdiff = 0.0f;
+        for (unsigned int i = 0; i < nx; ++i) {
+            SET(p, i, 0,     GET(p, i, 1));
+            SET(p, i, ny-1,  GET(p, i, ny-2));
+        }
+        for (unsigned int j = 0; j < ny; ++j) {
+            SET(p, 0,     j, GET(p, 1, j));
+            SET(p, nx-1,  j, GET(p, nx-2, j));
+        }
+
+        for (unsigned int j = 1; j < ny-1; j++) {
+            for (unsigned int i = 1; i < nx-1; i++) {
+                float p_left  = GET(p, i-1, j);
+                float p_right = GET(p, i+1, j);
+                float p_down  = GET(p, i, j-1);
+                float p_up    = GET(p, i, j+1);
+                float div_ij  = GET(div, i, j);
+
+                float p_new = (p_left + p_right + p_down + p_up - alpha * div_ij) * 0.25f;
+                float Pdiff = std::abs(p_new - GET(p, i, j));
+                maxPdiff = std::max(maxPdiff, Pdiff);
+
+                SET(p, i, j, p_new);
+            }
+        }
+    }
+}
+
+float project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
+                    scalar_field *div, float maxDiv, float dx, float dt, std::ofstream &log_file) {
+    unsigned int nx = p->nx;
+    unsigned int ny = p->ny;
+    const float rho = 1.0f;
+
+    LOG_INFO(log_file, "Projecting velocity field");
+
+    for (unsigned int j = 1; j < ny-1; j++) {
+        for (unsigned int i = 1; i < nx; i++) {
+            float gradp = (GET(p, i, j) - GET(p, i-1, j)) / dx;
+            SET(vx, i, j, GET(vx, i, j) - dt * gradp / rho);
+        }
+    }
+    for (unsigned int j = 1; j < ny; j++) {
+        for (unsigned int i = 1; i < nx-1; i++) {
+            float gradp = (GET(p, i, j) - GET(p, i, j-1)) / dx;
+            SET(vy, i, j, GET(vy, i, j) - dt * gradp / rho);
+        }
+    }
+    for (unsigned int j = 1; j < ny-1; j++) {
+        for (unsigned int i = 1; i < nx-1; i++) {
+            float dudx = (GET(vx, i+1, j) - GET(vx, i, j)) / dx;
+            float dvdy = (GET(vy, i, j+1) - GET(vy, i, j)) / dx;
+            SET(div, i, j, dudx + dvdy);
+            maxDiv = std::max(maxDiv, std::abs(GET(div, i, j)));
+        }
+    }
+    return maxDiv;
+}
+
+/*
+ @brief the semi lagrangian solver
+ @param data: the whole json
+ @param log_file: the log file
+*/
 int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     LOG_INFO(log_file, "Starting the semi-lagrangian solver");
 
@@ -58,25 +285,94 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     const unsigned int nx = data["grid"][0], ny = data["grid"][1];
     const float dx = data["space_steps"];
 
-    scalar_field *vx = scalar_field_init("vx", nx + 1, ny, dx, log_file);
-    scalar_field *vy = scalar_field_init("vy", nx, ny + 1, dx, log_file);
-    scalar_field *p = scalar_field_init("p", nx, ny, dx, log_file);
-    if (!vx || !vy || !p) {
+    // Initialising the fields
+    scalar_field *vx =
+        scalar_field_init("vx", nx + 1, ny, 0.5, 0, dx, log_file);
+    scalar_field *vy =
+        scalar_field_init("vy", nx, ny + 1, 0, 0.5, dx, log_file);
+    scalar_field *p = scalar_field_init("p", nx, ny, 0, 0, dx, log_file);
+    scalar_field *div = scalar_field_init("div", nx, ny, 0, 0, dx, log_file);
+
+    if (!vx || !vy || !p || !div) {
         LOG_ERR(log_file, "An error occured initializing fields.");
         return EXIT_FAILURE;
     }
 
+    // Applying the initial conditions
     apply_initial_condition(vx, data, "ic_vx", log_file);
     apply_initial_condition(vy, data, "ic_vy", log_file);
     apply_initial_condition(p, data, "ic_p", log_file);
 
-    write_scalar_vtk(vx, 0, 0, log_file);
-    write_scalar_vtk(vy, 0, 0, log_file);
-    write_scalar_vtk(p, 0, 0, log_file);
+    // This is just to have a whole pipeline
+    // write_scalar_vtk(vx, 0, 0, log_file);
+    // write_scalar_vtk(vy, 0, 0, log_file);
+    // write_scalar_vtk(p, 0, 0, log_file);
 
+    float dt = 0.1;
+    float maxDiv = 0.0f;
+
+    if (data.contains("delta_t"))
+        dt = data["delta_t"];
+
+    unsigned int nt = 10;
+    if (data.contains("nt"))
+        nt = data["nt"];
+
+    scalar_field *temp_vx = scalar_field_copy(vx, log_file);
+    scalar_field *temp_vy = scalar_field_copy(vy, log_file);
+    scalar_field *temp_p = scalar_field_copy(p, log_file);
+
+    size_t size_vx = vx->nx * vx->ny * sizeof(float);
+    size_t size_vy = vy->nx * vy->ny * sizeof(float);
+    size_t size_p = p->nx * p->ny * sizeof(float);
+
+    // Main time loop
+    for (unsigned int i = 0; i < nt; i++) {
+        LOG_INFO(log_file, "Starting time loop " << i << " out of " << nt);
+        // project
+
+        // save files
+        write_scalar_vtk(vx, i, 0, log_file);
+        write_scalar_vtk(vy, i, 0, log_file);
+        write_scalar_vtk(p, i, 0, log_file);
+
+        /* // advect
+        advect(vx, vy, dt, vx, temp_vx, log_file);
+        advect(vx, vy, dt, vy, temp_vy, log_file);
+        advect(vx, vy, dt, p, temp_p, log_file); */
+
+        for (unsigned int j = 1; j < ny-1; j++) {
+            for (unsigned int i = 1; i < nx-1; i++) {
+                float dudx = (GET(vx, i+1, j) - GET(vx, i, j)) / dx;
+                float dvdy = (GET(vy, i, j+1) - GET(vy, i, j)) / dx;
+                SET(div, i, j, dudx + dvdy);
+                maxDiv = std::max(maxDiv, std::abs(GET(div, i, j)));
+            }
+        }
+
+        LOG_INFO(log_file, "maximum divergence before projection: " << maxDiv);
+
+        gauss_sidel(temp_p, div, dx, dt, log_file);
+
+        maxDiv = project_velocity(temp_p, temp_vx, temp_vy, div, maxDiv, dx, dt, log_file);
+
+        LOG_INFO(log_file, "maximum divergence after projection: " << maxDiv);
+
+        memcpy(vx->values, temp_vx->values, size_vx);
+        memcpy(vy->values, temp_vy->values, size_vy);
+        memcpy(p->values, temp_p->values, size_p);
+
+    }
+
+    write_manifest_vtk(vx->name, dt, nt, 1, 1, 0, log_file);
+    write_manifest_vtk(vy->name, dt, nt, 1, 1, 0, log_file);
+    write_manifest_vtk(p->name, dt, nt, 1, 1, 0, log_file);
+    write_manifest_vtk(div->name, dt, nt, 1, 1, 0, log_file);
+    // As we're not using objects, we need this
     scalar_field_free(vx, log_file);
     scalar_field_free(vy, log_file);
     scalar_field_free(p, log_file);
+    scalar_field_free(div, log_file);
 
     return EXIT_SUCCESS;
 }
