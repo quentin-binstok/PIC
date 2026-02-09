@@ -2,6 +2,7 @@
 #include "utils.hpp"
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <string>
 
@@ -9,11 +10,13 @@
  @brief Initialises a scalar field
  @param name: the name, useful when writing files
  @param nx, ny: the extend of the grid
+ @param x_internal, y_internal: the position of the field inside a single cell
  @param dx: the step
  @param log_file: the log file
 */
 scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
-                                const unsigned int ny, const float dx,
+                                const unsigned int ny, const float x_internal,
+                                const float y_internal, const float dx,
                                 std::ofstream &log_file) {
     LOG_INFO(log_file, "Initializing scalar field " << name);
     scalar_field *field = new scalar_field;
@@ -21,6 +24,8 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
     field->name = name;
     field->nx = nx;
     field->ny = ny;
+    field->x_internal = x_internal;
+    field->y_internal = y_internal;
     field->dx = dx;
 
     // Initialises the array to zero
@@ -32,6 +37,30 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
     }
 
     return field;
+}
+
+scalar_field *scalar_field_copy(const scalar_field *field,
+                                std::ofstream &log_file) {
+    scalar_field *new_field = new scalar_field;
+
+    new_field->name = field->name;
+    new_field->nx = field->nx;
+    new_field->ny = field->ny;
+    new_field->x_internal = field->x_internal;
+    new_field->y_internal = field->y_internal;
+    new_field->dx = field->dx;
+
+    new_field->values = (float *)malloc(field->nx * field->ny * sizeof(float));
+    if (!new_field->values) {
+        LOG_ERR(log_file,
+                "Failed to allocate memory to copy scalar field. Exiting");
+        return NULL;
+    }
+
+    memcpy(new_field->values, field->values,
+           field->nx * field->ny * sizeof(float));
+
+    return new_field;
 }
 
 /*

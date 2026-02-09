@@ -51,8 +51,8 @@ int apply_initial_condition(scalar_field *field, json &data,
         }
 
         // Adding the condition to the grid
-        for (int j = condition[i]["tl"][1]; j < condition[i]["br"][1]; j++) {
-            for (int k = condition[i]["tl"][0]; k < condition[i]["br"][0];
+        for (int j = condition[i]["tl"][1]; j <= condition[i]["br"][1]; j++) {
+            for (int k = condition[i]["tl"][0]; k <= condition[i]["br"][0];
                  k++) {
                 float val = GET(field, k, j);
                 SET(field, k, j, value + val);

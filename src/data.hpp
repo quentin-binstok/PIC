@@ -16,6 +16,7 @@ values: the array of values
 typedef struct _scalar_field {
     std::string name;
     int nx, ny;
+    float x_internal, y_internal;
     float dx;
     float *values;
 } scalar_field;
@@ -40,11 +41,16 @@ typedef struct _particle_field {
  @brief Initialises a scalar field
  @param name: the name, useful when writing files
  @param nx, ny: the extend of the grid
+ @param x_internal, y_internal: the position of the field inside a single cell
  @param dx: the step
  @param log_file: the log file
 */
 scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
-                                const unsigned int ny, const float dx,
+                                const unsigned int ny, const float x_internal,
+                                const float y_internal, const float dx,
+                                std::ofstream &log_file);
+
+scalar_field *scalar_field_copy(const scalar_field *field,
                                 std::ofstream &log_file);
 
 /*
