@@ -1,43 +1,44 @@
 {
 	"solver": "semi-lagrangian",
-	"grid": [50, 50],
+	"grid": [500, 500],
 	"space_steps": 0.1,
-	"nt": 50,
+	"nt": 500,
 	"delta_t": 0.5,
+	"sampling_rate": 1,
 
 	"log_file": "log.txt",
 	"bc": [
 		{
 			"start": [0, 0],
 			"end": [2, 0],
-			"type": "border or open",
-			"speed": 0.5,
+			"type": "open",
+			"speed": [0.5, 0],
 			"pressure": 6
 		},
 		{
 			"start": [2, 0],
 			"end": [2, 2],
-			"type": "closed or open"
+			"type": "closed"
 		}
 	],
 	"ic_vx": [
 		{
-			"tl": [0, 0],
-			"br": [49, 49],
-			"value": 0.01
+			"tl": [1, 1],
+			"br": [498, 498],
+			"value": -0.05
 		}
 	],
 	"ic_vy": [
 		{
-			"tl": [0, 0],
-			"br": [49, 49],
+			"tl": [1, 1],
+			"br": [498, 498],
 			"value": -0.02
 		}
 	],
 	"ic_p": [
 		{
-			"tl": [10, 20],
-			"br": [20, 35],
+			"tl": [450, 450],
+			"br": [498, 498],
 			"value": 1
 		}
 	]

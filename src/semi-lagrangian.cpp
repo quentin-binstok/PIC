@@ -91,23 +91,19 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
     float x_int = q_n->x_internal, y_int = q_n->y_internal;
     float dx = q_n->dx;
 
-    for (unsigned int j = 1; j < ny - 1; j++) {
-        for (unsigned int i = 1; i < nx - 1; i++) {
-            LOG_INFO(log_file,
-                     "Starting advection at (" << i << "," << j << ")");
-            /*
-            1. Interpolate speed field at the point
-            2. Get the xp
-            3. Replace the value (i need an intermediate field)
-            */
+    if (0)
+        LOG_INFO(log_file, "test")
 
+    // #pragma omp parallel for collapse(2)
+    for (unsigned int j = 0; j < ny; j++) {
+        for (unsigned int i = 0; i < nx; i++) {
             // Interpolation of the speed field
 
             // coords where we need the speed field
             float x = (i + x_int) * dx, y = (j + y_int) * dx;
 
             // vx
-            float v_x;
+            float v_x = 0;
             int x_1, x_2, y_1, y_2;
             if (y_int > 0) {
                 x_1 = (i - 1);
@@ -121,15 +117,74 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
                 y_2 = (j);
             }
 
-            LOG_INFO(log_file, "Interpolating vx");
-            v_x = interpolate_bilinear(
-                x, y, (x_1 + vx->x_internal) * dx, (y_1 + vx->y_internal) * dx,
-                GET(vx, x_1, y_1), GET(vx, x_2, y_1), GET(vx, x_1, y_2),
-                GET(vx, x_2, y_2), dx, dx, log_file);
-            LOG_INFO(log_file, "vx = " << v_x);
+            if (!(x_1 < 0 || y_1 < 0 || x_2 >= (int)vx->nx ||
+                  y_2 >= (int)vx->ny))
+                v_x = interpolate_bilinear(x, y, (x_1 + vx->x_internal) * dx,
+                                           (y_1 + vx->y_internal) * dx,
+                                           GET(vx, x_1, y_1), GET(vx, x_2, y_1),
+                                           GET(vx, x_1, y_2), GET(vx, x_2, y_2),
+                                           dx, dx);
+            else {
+                LOG_DEBUG(log_file, "edge case")
+                // 8 possibilities
+
+                // left side
+                if (x_1 < 0 && y_1 >= 0 && y_2 < (int)vx->ny) {
+                    LOG_DEBUG(log_file, "left side")
+                    v_x = GET(vx, 0, y_1) * (1 - (y - y_1 * dx) / (dx)) +
+                          GET(vx, 0, y_2) * (y - y_1 * dx) / dx;
+                }
+
+                // right side
+                if (x_2 >= (int)vx->nx && y_1 >= 0 && y_2 < (int)vx->ny) {
+                    LOG_DEBUG(log_file, "right side")
+                    v_x =
+                        GET(vx, vx->nx - 1, y_1) * (1 - (y - y_1 * dx) / (dx)) +
+                        GET(vx, vx->nx - 1, y_2) * (y - y_1 * dx) / dx;
+                }
+
+                // bottom side
+                if (y_1 < 0 && x_1 >= 0 && x_2 < (int)vx->nx) {
+                    LOG_DEBUG(log_file, "bottom side");
+                    v_x = GET(vx, x_1, 0) * (1 - (x - x_1 * dx) / (dx)) +
+                          GET(vx, x_2, 0) * (x - x_1 * dx) / dx;
+                }
+
+                // top side
+                if (y_2 >= (int)vx->ny && x_1 >= 0 && x_2 < (int)vx->nx) {
+                    LOG_DEBUG(log_file, "top side");
+                    v_x =
+                        GET(vx, x_1, vx->ny - 1) * (1 - (x - x_1 * dx) / (dx)) +
+                        GET(vx, x_2, vx->ny - 1) * (x - x_1 * dx) / dx;
+                }
+
+                // bottom left
+                if (x_1 < 0 && y_1 < 0) {
+                    LOG_DEBUG(log_file, "botttom left");
+                    v_x = GET(vx, 0, 0);
+                }
+
+                // top left
+                if (x_1 < 0 && y_2 >= (int)vx->ny) {
+                    LOG_DEBUG(log_file, "top left");
+                    v_x = GET(vx, 0, vx->ny - 1);
+                }
+
+                // bottom right
+                if (x_2 >= (int)vx->nx && y_1 < 0) {
+                    LOG_DEBUG(log_file, "bottom right");
+                    v_x = GET(vx, vx->nx - 1, 0);
+                }
+
+                // top right
+                if (x_2 >= (int)vx->nx && y_2 >= (int)vx->ny) {
+                    LOG_DEBUG(log_file, "top right");
+                    v_x = GET(vx, vx->nx - 1, vx->ny - 1);
+                }
+            }
 
             // vy
-            float v_y;
+            float v_y = 0;
             if (x_int > 0) {
                 x_1 = (i);
                 x_2 = (i + 1);
@@ -142,28 +197,83 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
                 y_2 = (j);
             }
 
-            LOG_INFO(log_file, "Interpolating vy")
-            v_y = interpolate_bilinear(
-                x, y, (x_1 + vy->x_internal) * dx, (y_1 + vy->y_internal) * dx,
-                GET(vy, x_1, y_1), GET(vy, x_2, y_1), GET(vy, x_1, y_2),
-                GET(vy, x_2, y_2), dx, dx, log_file);
-            LOG_INFO(log_file, "vy = " << v_y);
+            if (!(x_1 < 0 || y_1 < 0 || x_2 >= (int)vy->nx ||
+                  y_2 >= (int)vy->ny))
+                v_y = interpolate_bilinear(x, y, (x_1 + vy->x_internal) * dx,
+                                           (y_1 + vy->y_internal) * dx,
+                                           GET(vy, x_1, y_1), GET(vy, x_2, y_1),
+                                           GET(vy, x_1, y_2), GET(vy, x_2, y_2),
+                                           dx, dx);
+            else {
+                LOG_DEBUG(log_file, "edge case")
+                // 8 possibilities
 
+                // left side
+                if (x_1 < 0 && y_1 >= 0 && y_2 < (int)vy->ny) {
+                    LOG_DEBUG(log_file, "left side")
+                    v_y = GET(vy, 0, y_1) * (1 - (y - y_1 * dx) / (dx)) +
+                          GET(vy, 0, y_2) * (y - y_1 * dx) / dx;
+                }
+
+                // right side
+                if (x_2 >= (int)vy->nx && y_1 >= 0 && y_2 < (int)vy->ny) {
+                    LOG_DEBUG(log_file, "right side")
+                    v_y =
+                        GET(vy, vy->nx - 1, y_1) * (1 - (y - y_1 * dx) / (dx)) +
+                        GET(vy, vy->nx - 1, y_2) * (y - y_1 * dx) / dx;
+                }
+
+                // bottom side
+                if (y_1 < 0 && x_1 >= 0 && x_2 < (int)vy->nx) {
+                    LOG_DEBUG(log_file, "bottom side");
+                    v_y = GET(vy, x_1, 0) * (1 - (x - x_1 * dx) / (dx)) +
+                          GET(vy, x_2, 0) * (x - x_1 * dx) / dx;
+                }
+
+                // top side
+                if (y_2 >= (int)vy->ny && x_1 >= 0 && x_2 < (int)vy->nx) {
+                    LOG_DEBUG(log_file, "top side");
+                    v_y =
+                        GET(vy, x_1, vy->ny - 1) * (1 - (x - x_1 * dx) / (dx)) +
+                        GET(vy, x_2, vy->ny - 1) * (x - x_1 * dx) / dx;
+                }
+
+                // bottom left
+                if (x_1 < 0 && y_1 < 0) {
+                    LOG_DEBUG(log_file, "botttom left");
+                    v_y = GET(vy, 0, 0);
+                }
+
+                // top left
+                if (x_1 < 0 && y_2 >= (int)vy->ny) {
+                    LOG_DEBUG(log_file, "top left");
+                    v_y = GET(vy, 0, vy->ny - 1);
+                }
+
+                // bottom right
+                if (x_2 >= (int)vy->nx && y_1 < 0) {
+                    LOG_DEBUG(log_file, "bottom right");
+                    v_y = GET(vy, vy->nx - 1, 0);
+                }
+
+                // top right
+                if (x_2 >= (int)vy->nx && y_2 >= (int)vy->ny) {
+                    LOG_DEBUG(log_file, "top right");
+                    v_y = GET(vy, vy->nx - 1, vy->ny - 1);
+                }
+            }
             // xp
             float xp_x = x - dt * v_x;
             float xp_y = y - dt * v_y;
 
-            LOG_INFO(log_file, "(xp_x, xp_y) " << xp_x << " " << xp_y);
-
             int xp = (int)(((xp_x) / dx - 0.5) + 1);
             int yp = (int)(((xp_y) / dx - 0.5) + 1);
-            LOG_INFO(log_file, "(xp, yp) " << xp << " " << yp);
             float x_int_interp = (xp_x / dx) - xp;
             float y_int_interp = (xp_y / dx) - yp;
 
             // Get q at xp
             // vx
-            float q_interp;
+            float q_interp = 0;
             if (x_int_interp > x_int) {
                 x_1 = xp;
                 x_2 = xp + 1;
@@ -180,15 +290,74 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
                 y_2 = yp;
             }
 
-            if (x_1 < 0 || y_1 < 0 || x_2 >= (int)nx || y_2 >= (int)nx)
-                continue;
+            if (!(x_1 < 0 || y_1 < 0 || x_2 >= (int)q_n->nx ||
+                  y_2 >= (int)q_n->ny))
+                q_interp = interpolate_bilinear(
+                    xp_x, xp_y, (x_1 + x_int) * dx, (y_1 + y_int) * dx,
+                    GET(q_n, x_1, y_1), GET(q_n, x_2, y_1), GET(q_n, x_1, y_2),
+                    GET(q_n, x_2, y_2), dx, dx);
+            else {
+                LOG_DEBUG(log_file, "edge case")
+                // 8 possibilities
 
-            LOG_INFO(log_file, "Interpolating q " << x_1 << x_2 << y_1 << y_2);
-            q_interp = interpolate_bilinear(
-                xp_x, xp_y, (x_1 + x_int) * dx, (y_1 + y_int) * dx,
-                GET(q_n, x_1, y_1), GET(q_n, x_2, y_1), GET(q_n, x_1, y_2),
-                GET(q_n, x_2, y_2), dx, dx, log_file);
-            LOG_INFO(log_file, "q_interp " << q_interp);
+                // left side
+                if (x_1 < 0 && y_1 >= 0 && y_2 < (int)q_n->ny) {
+                    LOG_DEBUG(log_file, "left side")
+                    q_interp =
+                        GET(q_n, 0, y_1) * (1 - (xp_y - y_1 * dx) / (dx)) +
+                        GET(q_n, 0, y_2) * (xp_y - y_1 * dx) / dx;
+                }
+
+                // right side
+                if (x_2 >= (int)q_n->nx && y_1 >= 0 && y_2 < (int)q_n->ny) {
+                    LOG_DEBUG(log_file, "right side")
+                    q_interp =
+                        GET(q_n, q_n->nx - 1, y_1) *
+                            (1 - (xp_y - y_1 * dx) / (dx)) +
+                        GET(q_n, q_n->nx - 1, y_2) * (xp_y - y_1 * dx) / dx;
+                }
+
+                // bottom side
+                if (y_1 < 0 && x_1 >= 0 && x_2 < (int)q_n->nx) {
+                    LOG_DEBUG(log_file, "bottom side");
+                    q_interp =
+                        GET(q_n, x_1, 0) * (1 - (xp_x - x_1 * dx) / (dx)) +
+                        GET(q_n, x_2, 0) * (xp_x - x_1 * dx) / dx;
+                }
+
+                // top side
+                if (y_2 >= (int)q_n->ny && x_1 >= 0 && x_2 < (int)q_n->nx) {
+                    LOG_DEBUG(log_file, "top side");
+                    q_interp =
+                        GET(q_n, x_1, q_n->ny - 1) *
+                            (1 - (xp_x - x_1 * dx) / (dx)) +
+                        GET(q_n, x_2, q_n->ny - 1) * (xp_x - x_1 * dx) / dx;
+                }
+
+                // bottom left
+                if (x_1 < 0 && y_1 < 0) {
+                    LOG_DEBUG(log_file, "botttom left");
+                    q_interp = GET(q_n, 0, 0);
+                }
+
+                // top left
+                if (x_1 < 0 && y_2 >= (int)q_n->ny) {
+                    LOG_DEBUG(log_file, "top left");
+                    q_interp = GET(q_n, 0, q_n->ny - 1);
+                }
+
+                // bottom right
+                if (x_2 >= (int)q_n->nx && y_1 < 0) {
+                    LOG_DEBUG(log_file, "bottom right");
+                    q_interp = GET(q_n, q_n->nx - 1, 0);
+                }
+
+                // top right
+                if (x_2 >= (int)q_n->nx && y_2 >= (int)q_n->ny) {
+                    LOG_DEBUG(log_file, "top right");
+                    q_interp = GET(q_n, q_n->nx - 1, q_n->ny - 1);
+                }
+            }
 
             SET(q_n1, i, j, q_interp);
         }
@@ -213,6 +382,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     // Getting base params
     const unsigned int nx = data["grid"][0], ny = data["grid"][1];
     const float dx = data["space_steps"];
+    const int sampling_rate = data["sampling_rate"];
 
     // Initialising the fields
     scalar_field *vx =
@@ -230,11 +400,6 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     apply_initial_condition(vy, data, "ic_vy", log_file);
     apply_initial_condition(p, data, "ic_p", log_file);
 
-    // This is just to have a whole pipeline
-    // write_scalar_vtk(vx, 0, 0, log_file);
-    // write_scalar_vtk(vy, 0, 0, log_file);
-    // write_scalar_vtk(p, 0, 0, log_file);
-
     float dt = 0.1;
     if (data.contains("delta_t"))
         dt = data["delta_t"];
@@ -247,37 +412,57 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
     scalar_field *temp_p = scalar_field_copy(p, log_file);
 
-    size_t size_vx = vx->nx * vx->ny * sizeof(float);
-    size_t size_vy = vy->nx * vy->ny * sizeof(float);
-    size_t size_p = p->nx * p->ny * sizeof(float);
+    // size_t size_vx = vx->nx * vx->ny * sizeof(float);
+    // size_t size_vy = vy->nx * vy->ny * sizeof(float);
+    // size_t size_p = p->nx * p->ny * sizeof(float);
 
     // Main time loop
+    bool inverted = false;
     for (unsigned int i = 0; i < nt; i++) {
         LOG_INFO(log_file, "Starting time loop " << i << " out of " << nt);
         // project
         // save files
-        write_scalar_vtk(vx, i, 0, log_file);
-        write_scalar_vtk(vy, i, 0, log_file);
-        write_scalar_vtk(p, i, 0, log_file);
+        if (sampling_rate && !(i % sampling_rate)) {
+            write_scalar_vtk(vx, i, 0, log_file);
+            write_scalar_vtk(vy, i, 0, log_file);
+            write_scalar_vtk(p, i, 0, log_file);
+        }
 
         // advect
         advect(vx, vy, dt, vx, temp_vx, log_file);
         advect(vx, vy, dt, vy, temp_vy, log_file);
         advect(vx, vy, dt, p, temp_p, log_file);
 
-        memcpy(vx->values, temp_vx->values, size_vx);
-        memcpy(vy->values, temp_vy->values, size_vy);
-        memcpy(p->values, temp_p->values, size_p);
+        inverted = !inverted;
+        scalar_field *invert_vx = vx;
+        scalar_field *invert_vy = vy;
+        scalar_field *invert_p = p;
+
+        vx = temp_vx;
+        vy = temp_vy;
+        p = temp_p;
+
+        temp_vx = invert_vx;
+        temp_vy = invert_vy;
+        temp_p = invert_p;
+
+        // memcpy(vx->values, temp_vx->values, size_vx);
+        // memcpy(vy->values, temp_vy->values, size_vy);
+        // memcpy(p->values, temp_p->values, size_p);
     }
 
     write_manifest_vtk(vx->name, dt, nt, 1, 1, 0, log_file);
     write_manifest_vtk(vy->name, dt, nt, 1, 1, 0, log_file);
-    write_manifest_vtk(p->name, dt, nt, 1, 1, 0, log_file);
+    write_manifest_vtk(p->name, dt, nt, sampling_rate, 1, 0, log_file);
 
     // As we're not using objects, we need this
     scalar_field_free(vx, log_file);
     scalar_field_free(vy, log_file);
     scalar_field_free(p, log_file);
+
+    scalar_field_free(temp_vx, log_file);
+    scalar_field_free(temp_vy, log_file);
+    scalar_field_free(temp_p, log_file);
 
     return EXIT_SUCCESS;
 }
