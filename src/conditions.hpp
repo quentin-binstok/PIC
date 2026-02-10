@@ -8,6 +8,8 @@
 
 using json = nlohmann::json;
 
+enum CELL_TYPE { LIQUID, SOLID };
+
 /*
  @brief Applies some initial conditions to the scalar field
  @param scalar_field: the field to which apply the conditions

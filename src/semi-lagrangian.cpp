@@ -2,6 +2,7 @@
 #include "data.hpp"
 #include "nlohmann/json.hpp"
 #include "utils.hpp"
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -94,7 +95,7 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
     if (0)
         LOG_INFO(log_file, "test")
 
-    // #pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2)
     for (unsigned int j = 0; j < ny; j++) {
         for (unsigned int i = 0; i < nx; i++) {
             // Interpolation of the speed field
@@ -105,259 +106,65 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
             // vx
             float v_x = 0;
             int x_1, x_2, y_1, y_2;
-            if (y_int > 0) {
-                x_1 = (i - 1);
-                x_2 = (i);
-                y_1 = (j);
-                y_2 = (j + 1);
-            } else {
-                x_1 = (i - 1);
-                x_2 = (i);
-                y_1 = (j - 1);
-                y_2 = (j);
-            }
 
-            if (!(x_1 < 0 || y_1 < 0 || x_2 >= (int)vx->nx ||
-                  y_2 >= (int)vx->ny))
-                v_x = interpolate_bilinear(x, y, (x_1 + vx->x_internal) * dx,
-                                           (y_1 + vx->y_internal) * dx,
-                                           GET(vx, x_1, y_1), GET(vx, x_2, y_1),
-                                           GET(vx, x_1, y_2), GET(vx, x_2, y_2),
-                                           dx, dx);
-            else {
-                LOG_DEBUG(log_file, "edge case")
-                // 8 possibilities
+            x_1 = (int)(x / dx) - 1;
+            x_1 = std::max(0, x_1);
+            x_2 = x_1 + 1;
+            x_2 = std::min(vx->nx - 1, x_2);
 
-                // left side
-                if (x_1 < 0 && y_1 >= 0 && y_2 < (int)vx->ny) {
-                    LOG_DEBUG(log_file, "left side")
-                    v_x = GET(vx, 0, y_1) * (1 - (y - y_1 * dx) / (dx)) +
-                          GET(vx, 0, y_2) * (y - y_1 * dx) / dx;
-                }
+            y_1 = (int)(y / dx);
+            y_1 = std::max(0, y_1);
+            y_2 = y_1 + 1;
+            y_2 = std::min(vx->ny - 1, y_2);
 
-                // right side
-                if (x_2 >= (int)vx->nx && y_1 >= 0 && y_2 < (int)vx->ny) {
-                    LOG_DEBUG(log_file, "right side")
-                    v_x =
-                        GET(vx, vx->nx - 1, y_1) * (1 - (y - y_1 * dx) / (dx)) +
-                        GET(vx, vx->nx - 1, y_2) * (y - y_1 * dx) / dx;
-                }
-
-                // bottom side
-                if (y_1 < 0 && x_1 >= 0 && x_2 < (int)vx->nx) {
-                    LOG_DEBUG(log_file, "bottom side");
-                    v_x = GET(vx, x_1, 0) * (1 - (x - x_1 * dx) / (dx)) +
-                          GET(vx, x_2, 0) * (x - x_1 * dx) / dx;
-                }
-
-                // top side
-                if (y_2 >= (int)vx->ny && x_1 >= 0 && x_2 < (int)vx->nx) {
-                    LOG_DEBUG(log_file, "top side");
-                    v_x =
-                        GET(vx, x_1, vx->ny - 1) * (1 - (x - x_1 * dx) / (dx)) +
-                        GET(vx, x_2, vx->ny - 1) * (x - x_1 * dx) / dx;
-                }
-
-                // bottom left
-                if (x_1 < 0 && y_1 < 0) {
-                    LOG_DEBUG(log_file, "botttom left");
-                    v_x = GET(vx, 0, 0);
-                }
-
-                // top left
-                if (x_1 < 0 && y_2 >= (int)vx->ny) {
-                    LOG_DEBUG(log_file, "top left");
-                    v_x = GET(vx, 0, vx->ny - 1);
-                }
-
-                // bottom right
-                if (x_2 >= (int)vx->nx && y_1 < 0) {
-                    LOG_DEBUG(log_file, "bottom right");
-                    v_x = GET(vx, vx->nx - 1, 0);
-                }
-
-                // top right
-                if (x_2 >= (int)vx->nx && y_2 >= (int)vx->ny) {
-                    LOG_DEBUG(log_file, "top right");
-                    v_x = GET(vx, vx->nx - 1, vx->ny - 1);
-                }
-            }
+            v_x = interpolate_bilinear(
+                x, y, (x_1 + vx->x_internal) * dx, (y_1 + vx->y_internal) * dx,
+                GET(vx, x_1, y_1), GET(vx, x_2, y_1), GET(vx, x_1, y_2),
+                GET(vx, x_2, y_2), dx, dx);
 
             // vy
             float v_y = 0;
-            if (x_int > 0) {
-                x_1 = (i);
-                x_2 = (i + 1);
-                y_1 = (j - 1);
-                y_2 = (j);
-            } else {
-                x_1 = (i - 1);
-                x_2 = (i);
-                y_1 = (j - 1);
-                y_2 = (j);
-            }
+            x_1 = (int)(x / dx);
+            x_1 = std::max(0, x_1);
+            x_2 = x_1 + 1;
+            x_2 = std::min(vy->nx - 1, x_2);
 
-            if (!(x_1 < 0 || y_1 < 0 || x_2 >= (int)vy->nx ||
-                  y_2 >= (int)vy->ny))
-                v_y = interpolate_bilinear(x, y, (x_1 + vy->x_internal) * dx,
-                                           (y_1 + vy->y_internal) * dx,
-                                           GET(vy, x_1, y_1), GET(vy, x_2, y_1),
-                                           GET(vy, x_1, y_2), GET(vy, x_2, y_2),
-                                           dx, dx);
-            else {
-                LOG_DEBUG(log_file, "edge case")
-                // 8 possibilities
+            y_1 = (int)(y / dx) - 1;
+            y_1 = std::max(0, y_1);
+            y_2 = y_1 + 1;
+            y_2 = std::min(vy->ny - 1, y_2);
 
-                // left side
-                if (x_1 < 0 && y_1 >= 0 && y_2 < (int)vy->ny) {
-                    LOG_DEBUG(log_file, "left side")
-                    v_y = GET(vy, 0, y_1) * (1 - (y - y_1 * dx) / (dx)) +
-                          GET(vy, 0, y_2) * (y - y_1 * dx) / dx;
-                }
+            v_y = interpolate_bilinear(
+                x, y, (x_1 + vy->x_internal) * dx, (y_1 + vy->y_internal) * dx,
+                GET(vy, x_1, y_1), GET(vy, x_2, y_1), GET(vy, x_1, y_2),
+                GET(vy, x_2, y_2), dx, dx);
 
-                // right side
-                if (x_2 >= (int)vy->nx && y_1 >= 0 && y_2 < (int)vy->ny) {
-                    LOG_DEBUG(log_file, "right side")
-                    v_y =
-                        GET(vy, vy->nx - 1, y_1) * (1 - (y - y_1 * dx) / (dx)) +
-                        GET(vy, vy->nx - 1, y_2) * (y - y_1 * dx) / dx;
-                }
-
-                // bottom side
-                if (y_1 < 0 && x_1 >= 0 && x_2 < (int)vy->nx) {
-                    LOG_DEBUG(log_file, "bottom side");
-                    v_y = GET(vy, x_1, 0) * (1 - (x - x_1 * dx) / (dx)) +
-                          GET(vy, x_2, 0) * (x - x_1 * dx) / dx;
-                }
-
-                // top side
-                if (y_2 >= (int)vy->ny && x_1 >= 0 && x_2 < (int)vy->nx) {
-                    LOG_DEBUG(log_file, "top side");
-                    v_y =
-                        GET(vy, x_1, vy->ny - 1) * (1 - (x - x_1 * dx) / (dx)) +
-                        GET(vy, x_2, vy->ny - 1) * (x - x_1 * dx) / dx;
-                }
-
-                // bottom left
-                if (x_1 < 0 && y_1 < 0) {
-                    LOG_DEBUG(log_file, "botttom left");
-                    v_y = GET(vy, 0, 0);
-                }
-
-                // top left
-                if (x_1 < 0 && y_2 >= (int)vy->ny) {
-                    LOG_DEBUG(log_file, "top left");
-                    v_y = GET(vy, 0, vy->ny - 1);
-                }
-
-                // bottom right
-                if (x_2 >= (int)vy->nx && y_1 < 0) {
-                    LOG_DEBUG(log_file, "bottom right");
-                    v_y = GET(vy, vy->nx - 1, 0);
-                }
-
-                // top right
-                if (x_2 >= (int)vy->nx && y_2 >= (int)vy->ny) {
-                    LOG_DEBUG(log_file, "top right");
-                    v_y = GET(vy, vy->nx - 1, vy->ny - 1);
-                }
-            }
             // xp
             float xp_x = x - dt * v_x;
             float xp_y = y - dt * v_y;
 
-            int xp = (int)(((xp_x) / dx - 0.5) + 1);
-            int yp = (int)(((xp_y) / dx - 0.5) + 1);
-            float x_int_interp = (xp_x / dx) - xp;
-            float y_int_interp = (xp_y / dx) - yp;
+            xp_x = std::max((float)0, xp_x);
+            xp_y = std::max((float)0, xp_y);
+            xp_x = std::min(q_n->nx * dx, xp_x);
+            xp_y = std::min(q_n->ny * dx, xp_y);
+
+            x_1 = (int)(xp_x / dx);
+            x_1 = std::max(0, x_1);
+            x_2 = x_1 + 1;
+            x_2 = std::min(q_n->nx - 1, x_2);
+
+            y_1 = (int)(xp_y / dx);
+            y_1 = std::max(0, y_1);
+            y_2 = y_1 + 1;
+            y_2 = std::min(q_n->ny - 1, y_2);
 
             // Get q at xp
             // vx
             float q_interp = 0;
-            if (x_int_interp > x_int) {
-                x_1 = xp;
-                x_2 = xp + 1;
-            } else {
-                x_1 = xp - 1;
-                x_2 = xp;
-            }
-
-            if (y_int_interp > y_int) {
-                y_1 = yp;
-                y_2 = yp + 1;
-            } else {
-                y_1 = yp - 1;
-                y_2 = yp;
-            }
-
-            if (!(x_1 < 0 || y_1 < 0 || x_2 >= (int)q_n->nx ||
-                  y_2 >= (int)q_n->ny))
-                q_interp = interpolate_bilinear(
-                    xp_x, xp_y, (x_1 + x_int) * dx, (y_1 + y_int) * dx,
-                    GET(q_n, x_1, y_1), GET(q_n, x_2, y_1), GET(q_n, x_1, y_2),
-                    GET(q_n, x_2, y_2), dx, dx);
-            else {
-                LOG_DEBUG(log_file, "edge case")
-                // 8 possibilities
-
-                // left side
-                if (x_1 < 0 && y_1 >= 0 && y_2 < (int)q_n->ny) {
-                    LOG_DEBUG(log_file, "left side")
-                    q_interp =
-                        GET(q_n, 0, y_1) * (1 - (xp_y - y_1 * dx) / (dx)) +
-                        GET(q_n, 0, y_2) * (xp_y - y_1 * dx) / dx;
-                }
-
-                // right side
-                if (x_2 >= (int)q_n->nx && y_1 >= 0 && y_2 < (int)q_n->ny) {
-                    LOG_DEBUG(log_file, "right side")
-                    q_interp =
-                        GET(q_n, q_n->nx - 1, y_1) *
-                            (1 - (xp_y - y_1 * dx) / (dx)) +
-                        GET(q_n, q_n->nx - 1, y_2) * (xp_y - y_1 * dx) / dx;
-                }
-
-                // bottom side
-                if (y_1 < 0 && x_1 >= 0 && x_2 < (int)q_n->nx) {
-                    LOG_DEBUG(log_file, "bottom side");
-                    q_interp =
-                        GET(q_n, x_1, 0) * (1 - (xp_x - x_1 * dx) / (dx)) +
-                        GET(q_n, x_2, 0) * (xp_x - x_1 * dx) / dx;
-                }
-
-                // top side
-                if (y_2 >= (int)q_n->ny && x_1 >= 0 && x_2 < (int)q_n->nx) {
-                    LOG_DEBUG(log_file, "top side");
-                    q_interp =
-                        GET(q_n, x_1, q_n->ny - 1) *
-                            (1 - (xp_x - x_1 * dx) / (dx)) +
-                        GET(q_n, x_2, q_n->ny - 1) * (xp_x - x_1 * dx) / dx;
-                }
-
-                // bottom left
-                if (x_1 < 0 && y_1 < 0) {
-                    LOG_DEBUG(log_file, "botttom left");
-                    q_interp = GET(q_n, 0, 0);
-                }
-
-                // top left
-                if (x_1 < 0 && y_2 >= (int)q_n->ny) {
-                    LOG_DEBUG(log_file, "top left");
-                    q_interp = GET(q_n, 0, q_n->ny - 1);
-                }
-
-                // bottom right
-                if (x_2 >= (int)q_n->nx && y_1 < 0) {
-                    LOG_DEBUG(log_file, "bottom right");
-                    q_interp = GET(q_n, q_n->nx - 1, 0);
-                }
-
-                // top right
-                if (x_2 >= (int)q_n->nx && y_2 >= (int)q_n->ny) {
-                    LOG_DEBUG(log_file, "top right");
-                    q_interp = GET(q_n, q_n->nx - 1, q_n->ny - 1);
-                }
-            }
+            q_interp = interpolate_bilinear(
+                xp_x, xp_y, (x_1 + x_int) * dx, (y_1 + y_int) * dx,
+                GET(q_n, x_1, y_1), GET(q_n, x_2, y_1), GET(q_n, x_1, y_2),
+                GET(q_n, x_2, y_2), dx, dx);
 
             SET(q_n1, i, j, q_interp);
         }

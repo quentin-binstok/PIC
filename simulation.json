@@ -1,9 +1,9 @@
 {
 	"solver": "semi-lagrangian",
-	"grid": [500, 500],
+	"grid": [5000, 5000],
 	"space_steps": 0.1,
 	"nt": 500,
-	"delta_t": 0.5,
+	"delta_t": 0.05,
 	"sampling_rate": 1,
 
 	"log_file": "log.txt",
@@ -24,21 +24,21 @@
 	"ic_vx": [
 		{
 			"tl": [1, 1],
-			"br": [498, 498],
-			"value": -0.05
+			"br": [499, 499],
+			"value": -0.5
 		}
 	],
 	"ic_vy": [
 		{
 			"tl": [1, 1],
-			"br": [498, 498],
-			"value": -0.02
+			"br": [499, 499],
+			"value": -0.2
 		}
 	],
 	"ic_p": [
 		{
-			"tl": [450, 450],
-			"br": [498, 498],
+			"tl": [400, 470],
+			"br": [475, 499],
 			"value": 1
 		}
 	]
