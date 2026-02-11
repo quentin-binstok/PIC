@@ -14,6 +14,5 @@
  @param Dx, Dy: the space steps
 */
 float interpolate_bilinear(float x, float y, float x1, float y1, float q11,
-                           float q21, float q12, float q22, float Dx, float Dy,
-                           std::ofstream &log_file);
+                           float q21, float q12, float q22, float Dx, float Dy);
 #endif
