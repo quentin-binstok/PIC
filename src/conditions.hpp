@@ -5,6 +5,14 @@
 #include "data.hpp"
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
+enum CELL_TYPE { LIQUID, SOLID };
+/*
+ @brief Applies some initial conditions to the scalar field
+ @param scalar_field: the field to which apply the conditions
+ @param data: the full input json
+ @param condition_name: the name of the initial condition in the json
+ @param log_file: the log file
+*/
 int apply_initial_condition(scalar_field *field, json &data,
                             std::string condition_name,
                             std::ofstream &log_file);
