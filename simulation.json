@@ -1,10 +1,11 @@
 {
 	"solver": "semi-lagrangian",
-	"grid": [5000, 5000],
+	"grid": [200, 200],
 	"space_steps": 0.1,
-	"nt": 500,
+	"nt": 50,
 	"delta_t": 0.05,
 	"sampling_rate": 1,
+	"rho": 1.0,
 
 	"log_file": "log.txt",
 	"bc": [
@@ -24,13 +25,27 @@
 	"ic_vx": [
 		{
 			"tl": [1, 1],
+<<<<<<< simulation.json
+			"br": [199, 199],
+			"value": 1.0
+		},
+		{
+			"tl": [50, 50],
+			"br": [90, 90],
+			"value": 2.0
+=======
 			"br": [499, 499],
 			"value": -0.5
+>>>>>>> simulation.json
 		}
 	],
 	"ic_vy": [
 		{
 			"tl": [1, 1],
+<<<<<<< simulation.json
+			"br": [199, 199],
+			"value": 1.0
+=======
 			"br": [499, 499],
 			"value": -0.2
 		}
@@ -40,6 +55,7 @@
 			"tl": [400, 470],
 			"br": [475, 499],
 			"value": 1
+>>>>>>> simulation.json
 		}
 	]
 }

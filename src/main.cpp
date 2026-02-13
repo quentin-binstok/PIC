@@ -1,3 +1,4 @@
+
 #include "test.hpp"
 #include <cassert>
 #include <cstdlib>
@@ -21,11 +22,9 @@ int main(int argc, char **argv) {
         std::cerr << "Usage: " << argv[0] << " <param.json>\n";
         return EXIT_FAILURE;
     }
-
     // Load json file
     std::ifstream inputf(argv[1]);
     json data = json::parse(inputf);
-
     // Open log file as write and append
     // Handles a default case
     std::string log_file_path;
@@ -54,7 +53,6 @@ int main(int argc, char **argv) {
 #else
     LOG_INFO(log_file, "OpenMP not available.");
 #endif
-
     // Debug log
 #ifdef NDEBUG
     // code has been configured with "cmake -DCMAKE_BUILD_TYPE=Release .."

@@ -20,3 +20,4 @@ cd $build_dir
 cmake ..
 make -j$(nproc)
 cp $executable ..
+
