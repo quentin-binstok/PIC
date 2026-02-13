@@ -2,8 +2,10 @@
 #ifndef __SOLVER_DATA__
 #define __SOLVER_DATA__
 #include <string>
+
 #define GET(data, i, j) ((data)->values[(data)->nx * (j) + (i)])
 #define SET(data, i, j, val) ((data)->values[(data)->nx * (j) + (i)] = (val))
+
 /*
 A structure to store scalar fields
 name: the name of the field
@@ -33,6 +35,7 @@ typedef struct _particle_field {
     float *velocity; // idem
     int *id;
 } particle_field;
+
 /*
  @brief Initialises a scalar field
  @param name: the name, useful when writing files
@@ -45,18 +48,23 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
                                 const unsigned int ny, const float x_internal,
                                 const float y_internal, const float dx,
                                 std::ofstream &log_file);
+
 scalar_field *scalar_field_copy(const scalar_field *field,
                                 std::ofstream &log_file);
+
 /*
  @brief Frees a scalar field
  @param field: the field
  @param log_file: the log file
 */
 void scalar_field_free(scalar_field *field, std::ofstream &log_file);
+
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
                        int numranks, bool vtp, std::ofstream &log_file);
+
 int write_scalar_vtk(scalar_field *data, int step, int rank,
                      std::ofstream &log_file);
+
 int write_particles_vtp(const particle_field *field, const int step,
                         const int rank, const int ndim,
                         std::ofstream &log_file);

@@ -1,11 +1,15 @@
-
 #ifndef __SOLVER_CONDITIONS__
 #define __SOLVER_CONDITIONS__
+
 #include <fstream>
+
 #include "data.hpp"
 #include "nlohmann/json.hpp"
+
 using json = nlohmann::json;
+
 enum CELL_TYPE { LIQUID, SOLID };
+
 /*
  @brief Applies some initial conditions to the scalar field
  @param scalar_field: the field to which apply the conditions
@@ -16,4 +20,5 @@ enum CELL_TYPE { LIQUID, SOLID };
 int apply_initial_condition(scalar_field *field, json &data,
                             std::string condition_name,
                             std::ofstream &log_file);
+
 #endif
