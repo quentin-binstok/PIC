@@ -187,7 +187,7 @@ inline int gauss_seidel(scalar_field *p, scalar_field *div, scalar_field *dom,
     const float alpha = dx * dx * rho / dt;
     float maxPdiff = 1.0;
     
-    while (maxPdiff > 1e-1) { 
+    while (maxPdiff > 1e-3) { 
         maxPdiff = 0.0;
         #pragma omp parallel for collapse(2) reduction(max:maxPdiff)
         for (int j = 0; j < ny; j++) {
@@ -298,7 +298,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     }
 
     // Applying the initial conditions
-    initialize_domain(dom, data, "ic_cell", log_file);
+    initialize_domain(dom, data, "domain", log_file);
     initialize_vx(vx, dom, data, "ic_vx", log_file);
 
     float dt = 0.1;
