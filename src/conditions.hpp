@@ -17,7 +17,10 @@ enum CELL_TYPE { LIQUID, SOLID };
  @param condition_name: the name of the initial condition in the json
  @param log_file: the log file
 */
-int apply_initial_condition(scalar_field *field, json &data,
+int initialize_domain(scalar_field *field, json &data,
+                            std::string condition_name,
+                            std::ofstream &log_file);
+int initialize_vx(scalar_field *field, scalar_field *dom, json &data,
                             std::string condition_name,
                             std::ofstream &log_file);
 

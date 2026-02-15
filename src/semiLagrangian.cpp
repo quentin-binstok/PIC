@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <chrono>
 using json = nlohmann::json;
 /*
  @brief checks the validity of parameters (except boundary and initial
@@ -151,11 +152,13 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
  @param dx: the grid spacing
  @return the maximum divergence in the field, for logging purposes
 */
-float divergence(scalar_field *vx, scalar_field *vy, scalar_field *div, float dx) {
+inline int divergence(scalar_field *vx, scalar_field *vy, scalar_field *div, 
+                            float dx) {
     int nx = div->nx;
     int ny = div->ny;
 
     float maxDiv = 0.0;
+    #pragma omp parallel for collapse(2) reduction(max:maxDiv)
     // div has the size of pressure so even when i = nx-1 or j = ny-1, we can safely access vx and vy
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
@@ -166,7 +169,7 @@ float divergence(scalar_field *vx, scalar_field *vy, scalar_field *div, float dx
             maxDiv = std::max(maxDiv, std::abs(d));
         }
     }
-    return maxDiv;
+    return EXIT_SUCCESS;
 }
 
 /*
@@ -177,43 +180,49 @@ float divergence(scalar_field *vx, scalar_field *vy, scalar_field *div, float dx
  @param dt: the time step
  @param rho: the density
 */
-void gauss_seidel(scalar_field *p, scalar_field *div, float dx, float dt, float rho) {
-    int nx = p->nx;
+inline int gauss_seidel(scalar_field *p, scalar_field *div, scalar_field *dom, 
+                    float dx, float dt, float rho, std::ofstream &log_file) {
+    int nx = p->nx;  
     int ny = p->ny;
     const float alpha = dx * dx * rho / dt;
     float maxPdiff = 1.0;
     
-    // we will need to change the ifs when the field with solid or fluid will be implemented 
-    while (maxPdiff > 1e-5) { 
+    while (maxPdiff > 1e-1) { 
         maxPdiff = 0.0;
+        #pragma omp parallel for collapse(2) reduction(max:maxPdiff)
         for (int j = 0; j < ny; j++) {
             for (int i = 0; i < nx; i++) {
                 float sum = 0.0;
                 int count = 0;
-                if (i!=0){
+                
+                if (GET(dom, i, j+1) == 0.0) { // Liquid cell on the left  
                     sum += GET(p, i-1, j);
                     ++count;
                 }
-                if (i!=nx-1){
+                if (GET(dom, i+2, j+1) == 0.0) { // Liquid cell on the right
                     sum += GET(p, i+1, j);
                     ++count;
                 }
-                if (j!=0){
+                if (GET(dom, i+1, j) == 0.0) { // Liquid cell below  
                     sum += GET(p, i, j-1);
                     ++count;
                 }
-                if (j!=ny-1){
+                if (GET(dom, i+1, j+2) == 0.0) { // Liquid cell above
                     sum += GET(p, i, j+1);
                     ++count;
                 }
-                sum = (sum - alpha * GET(div, i, j)) / count;
-        
-                float Pdiff = std::abs(sum - GET(p, i, j));
-                maxPdiff = std::max(maxPdiff, Pdiff);
-                SET(p, i, j, sum);
+                
+                if (count > 0) { 
+                    sum = (sum - alpha * GET(div, i, j)) / count;
+                    float Pdiff = std::abs(sum - GET(p, i, j));
+                    maxPdiff = std::max(maxPdiff, Pdiff);
+                    SET(p, i, j, sum);
+                }
             }
         }
     }
+    LOG_INFO(log_file, "Poisson equation solved with Gauss-Seidel iterations, max pressure difference: " << maxPdiff);
+    return EXIT_SUCCESS;
 }
 
 /*
@@ -223,43 +232,45 @@ void gauss_seidel(scalar_field *p, scalar_field *div, float dx, float dt, float 
  @param dt: the time step
  @param rho: the density
 */
-void project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy, 
-                         float dx, float dt, float rho) {
+inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy, scalar_field *dom,
+                           float dx, float dt, float rho, std::ofstream &log_file) {
     int vx_nx = vx->nx;
     int vx_ny = vx->ny;
+
+    #pragma omp parallel for collapse(2)
+    for (int j = 0; j < vx_ny; j++) {
+        for (int i = 0; i < vx_nx; i++) {
+            if (GET(dom, i+1, j+1) == 1.0 || GET(dom, i, j+1) == 1.0) {
+                    continue; // Skip solid cells
+                }
+            float gradp_x = (GET(p, i, j) - GET(p, i-1, j)) / dx;
+            SET(vx, i, j, GET(vx, i, j) - dt * gradp_x / rho);
+        }
+    }
 
     int vy_nx = vy->nx;
     int vy_ny = vy->ny;
 
-    // for now simply handle the boundaries by letting them at 0
-    for (int j = 0; j < vx_ny; j++) {
-        for (int i = 0; i < vx_nx; i++) {
-            if (i == 0 || i == vx_nx-1) {
-                continue; // Skip boundaries
-            }
-            float gradp = (GET(p, i, j) - GET(p, i-1, j)) / dx;
-            SET(vx, i, j, GET(vx, i, j) - dt * gradp / rho);
-        }
-    }
-
     #pragma omp parallel for collapse(2)
-    for (int j = 0; j < vy_ny; j++) {
+    for (int j = 0; j < vy_ny; j++) { 
         for (int i = 0; i < vy_nx; i++) {
-            if (j == 0 || j == vy_ny-1) {
-                continue; // Skip boundaries
-            }
-            float gradp = (GET(p, i, j) - GET(p, i, j-1)) / dx;
-            SET(vy, i, j, GET(vy, i, j) - dt * gradp / rho);
+            if (GET(dom, i+1, j+1) == 1.0 || GET(dom, i+1, j) == 1.0) {
+                    continue; // Skip solid cells
+                }
+            float gradp_y = (GET(p, i, j) - GET(p, i, j-1)) / dx;
+            SET(vy, i, j, GET(vy, i, j) - dt * gradp_y / rho);
         }
     }
+    LOG_INFO(log_file, "Velocity field projected to be divergence free");
+    return EXIT_SUCCESS;
 }
-
 /*
  @brief the semi lagrangian solver
  @param data: the whole json
  @param log_file: the log file
 */
 int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
+    auto t0 = std::chrono::high_resolution_clock::now();
     LOG_INFO(log_file, "Starting the semi-lagrangian solver");
 
     if (check_params(data, log_file)) {
@@ -274,22 +285,21 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
 
 
     // Initialising the fields
-    scalar_field *vx =
-        scalar_field_init("vx", nx + 1, ny, 0.5, 0, dx, log_file);
-    scalar_field *vy =
-        scalar_field_init("vy", nx, ny + 1, 0, 0.5, dx, log_file);
+    scalar_field *vx = scalar_field_init("vx", nx + 1, ny, 0.5, 0, dx, log_file);
+    scalar_field *vy = scalar_field_init("vy", nx, ny + 1, 0, 0.5, dx, log_file);
     scalar_field *p = scalar_field_init("p", nx, ny, 0, 0, dx, log_file);
     scalar_field *div = scalar_field_init("div", nx, ny, 0, 0, dx, log_file);
+    scalar_field *dom = scalar_field_init("dom", nx+2, ny+2, 0, 0, dx, log_file);
 
-    if (!vx || !vy || !p || !div) {
+
+    if (!vx || !vy || !p || !div || !dom) {
         LOG_ERR(log_file, "An error occured initializing fields.");
         return EXIT_FAILURE;
     }
 
     // Applying the initial conditions
-    apply_initial_condition(vx, data, "ic_vx", log_file);
-    apply_initial_condition(vy, data, "ic_vy", log_file);
-    apply_initial_condition(p, data, "ic_p", log_file);
+    initialize_domain(dom, data, "ic_cell", log_file);
+    initialize_vx(vx, dom, data, "ic_vx", log_file);
 
     float dt = 0.1;
     if (data.contains("delta_t"))
@@ -302,8 +312,6 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     float rho = 1.0;
     if (data.contains("rho"))
         rho = data["rho"];
-
-    float maxDiv = 0.0;
 
     scalar_field *temp_vx = scalar_field_copy(vx, log_file);
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
@@ -322,22 +330,17 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
             write_scalar_vtk(div, i, 0, log_file);
         }
 
-        maxDiv = divergence(vx, vy, div, dx);
+        divergence(vx, vy, div, dx);
 
-        LOG_INFO(log_file, "maximum divergence before gauss-seidel: " << maxDiv);
+        gauss_seidel(p, div, dom, dx, dt, rho, log_file);
 
-        gauss_seidel(p, div, dx, dt, rho);
-
-        project_velocity(p, vx, vy, dx, dt, rho);
-
-        maxDiv = divergence(vx, vy, div, dx);
-
-        LOG_INFO(log_file, "maximum divergence after projection: " << maxDiv);
+        project_velocity(p, vx, vy, dom, dx, dt, rho, log_file);
 
         // advect
         advect(vx, vy, dt, vx, temp_vx, log_file);
         advect(vx, vy, dt, vy, temp_vy, log_file);
         advect(vx, vy, dt, p, temp_p, log_file);
+
 
         inverted = !inverted;
         scalar_field *invert_vx = vx;
@@ -354,20 +357,24 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
 
     }
 
-    write_manifest_vtk(vx->name, dt, nt, 1, 1, 0, log_file);
-    write_manifest_vtk(vy->name, dt, nt, 1, 1, 0, log_file);
-    write_manifest_vtk(p->name, dt, nt, 1, 1, 0, log_file);
-    write_manifest_vtk(div->name, dt, nt, 1, 1, 0, log_file);
-
+    write_manifest_vtk(vx->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(vy->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(p->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(div->name, dt, nt, sampling_rate, 1, 0, log_file);
     // As we're not using objects, we need this
     scalar_field_free(vx, log_file);
     scalar_field_free(vy, log_file);
     scalar_field_free(p, log_file);
     scalar_field_free(div, log_file);
+    scalar_field_free(dom, log_file);
 
     scalar_field_free(temp_vx, log_file);
     scalar_field_free(temp_vy, log_file);
     scalar_field_free(temp_p, log_file);
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double seconds = std::chrono::duration<double>(t1 - t0).count();
+    LOG_INFO(log_file, "Total simulation time: " << seconds << " seconds");
 
     return EXIT_SUCCESS;
 }

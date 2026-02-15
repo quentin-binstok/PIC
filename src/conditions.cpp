@@ -14,48 +14,102 @@ using json = nlohmann::json;
  @param condition_name: the name of the initial condition in the json
  @param log_file: the log file
 */
-int apply_initial_condition(scalar_field *field, json &data,
-                            std::string condition_name,
-                            std::ofstream &log_file) {
-    LOG_INFO(log_file, "Applying initial condition " << condition_name << " on "
+
+int initialize_domain(scalar_field *field, json &data,
+                        std::string condition_name, std::ofstream &log_file) {
+    LOG_INFO(log_file, "Applying initial domain " << condition_name << " on "
                                                      << field->name);
 
     // Checking that condition is an array
-    if (data.contains(condition_name) &&
-        data[condition_name].type() != json::value_t::array) {
+    if (data.contains(condition_name) && data[condition_name].type() != json::value_t::array) {
         LOG_ERR(log_file, "Condition " << condition_name << " is not an array");
         return EXIT_FAILURE;
     }
-
-    // Checking that condition exists
-    if (!data.contains(condition_name) || !data[condition_name].size()) {
-        LOG_WARN(log_file, "Condition " << condition_name << " unspecified");
-        return EXIT_SUCCESS;
+    // Checking that condition is the correct one
+    if (condition_name == "ic_cell" && !data[condition_name].size()) {
+        LOG_ERR(log_file, "Condition " << condition_name << " is not the correct one");
+        return EXIT_FAILURE;
     }
 
-    // Easy access to the condition
     auto condition = data[condition_name];
-    for (int i = 0; i < (int)condition.size(); i++) {
-        const float value = condition[i]["value"];
+    int nx = field->nx, ny = field->ny;
 
-        const int start_x = condition[i]["tl"][0],
-                  start_y = condition[i]["tl"][1];
-        const int end_x = condition[i]["br"][0], end_y = condition[i]["br"][1];
+    // First we set the bc
+    float value = 1.0;
+    if (data.contains("bc")) {
+        value = data["bc"];
+    }
+    for (int j = 0; j < ny; j++) {
+        SET(field, 0, j, value);
+        SET(field, nx - 1, j, value);
+    }
+    for (int i = 0; i < nx; i++) {
+        SET(field, i, 0, value);
+        SET(field, i, ny - 1, value);
+    }
 
+    for (int k = 0; k < (int)condition.size(); k++) {
+        float value = condition[k]["value"];
+        int start_x = condition[k]["tl"][0], start_y = condition[k]["tl"][1];
+        int end_x = condition[k]["br"][0], end_y = condition[k]["br"][1];
         // Checking that we're in the grid
-        if (start_x < 0 || start_y < 0 || end_x >= field->nx ||
-            end_y >= field->ny) {
-            LOG_ERR(log_file, "Condition " << i << " in " << condition_name
+        if (start_x+1 < 0 || start_y+1 < 0 || end_x+1 > nx -1 ||
+            end_y+1 > ny -1) {
+            LOG_ERR(log_file, "Condition " << k << " in " << condition_name
                                            << " out of bounds");
             return EXIT_FAILURE;
         }
+        // Adding the condition to the grid
+        for (int j = start_y; j <= end_y; j++) {
+            for (int i = start_x; i <= end_x; i++) {
+                float val = GET(field, i+1, j+1);
+                SET(field, i+1, j+1, value + val);
+            }
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
+
+int initialize_vx(scalar_field *field, scalar_field *dom, json &data,
+                            std::string condition_name,
+                            std::ofstream &log_file) {
+    LOG_INFO(log_file, "Applying " << condition_name << " on "
+                                                     << field->name);
+
+    // Checking that condition is an array
+    if (data.contains(condition_name) && data[condition_name].type() != json::value_t::array) {
+        LOG_ERR(log_file, "Condition " << condition_name << " is not an array");
+        return EXIT_FAILURE;
+    }
+    // Easy access to the condition
+    auto condition = data[condition_name];
+    int nx = field->nx;  
+    int ny = field->ny; 
+
+    for (int k = 0; k < (int)condition.size(); k++) {
+        const float value = condition[k]["value"];
+        const int start_x = condition[k]["tl"][0];
+        const int start_y = condition[k]["tl"][1];
+        const int end_x = condition[k]["br"][0];
+        const int end_y = condition[k]["br"][1];
+        
+        if (start_x < 0 || start_y < 0 || end_x > nx -1 || end_y > ny -1) {
+            LOG_ERR(log_file, "Condition " << k << " in " << condition_name
+                                           << " out of bounds");
+            return EXIT_FAILURE;
+        }
+        
 
         // Adding the condition to the grid
-        for (int j = condition[i]["tl"][1]; j <= condition[i]["br"][1]; j++) {
-            for (int k = condition[i]["tl"][0]; k <= condition[i]["br"][0];
-                 k++) {
-                float val = GET(field, k, j);
-                SET(field, k, j, value + val);
+        #pragma omp parallel for collapse(2)
+        for (int j = start_y; j < end_y; j++) {
+            for (int i = start_x; i < end_x; i++) {
+                if (GET(dom, i+1, j+1) == 1.0 || GET(dom, i, j+1) == 1.0) {
+                    continue; // Skip solid cells
+                }
+                float val = GET(field, i, j);
+                SET(field, i, j, value + val);
             }
         }
     }
