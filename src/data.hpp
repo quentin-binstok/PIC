@@ -20,6 +20,7 @@ typedef struct _scalar_field {
     float dx;
     float *values;
 } scalar_field;
+
 /*
 A structure to store particles
 name: the name of the particle field

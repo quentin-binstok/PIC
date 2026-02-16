@@ -18,10 +18,8 @@ enum CELL_TYPE { LIQUID, SOLID };
  @param log_file: the log file
 */
 int initialize_domain(scalar_field *field, json &data,
-                            std::string condition_name,
-                            std::ofstream &log_file);
-int initialize_vx(scalar_field *field, scalar_field *dom, json &data,
-                            std::string condition_name,
-                            std::ofstream &log_file);
+                      std::string condition_name, std::ofstream &log_file);
+int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
+                     std::string condition_name, std::ofstream &log_file);
 
 #endif

@@ -1,31 +1,31 @@
 {
 	"solver": "semi-lagrangian",
-	"grid": [50,50],
+	"grid": [500, 500],
 	"space_steps": 0.1,
-	"nt": 20,
+	"nt": 1000,
 	"delta_t": 0.1,
 	"sampling_rate": 1,
 	"rho": 1000.0,
+	"tol": 1e-4,
+	"max_iter": 5e4,
 
 	"log_file": "log.txt",
 
-	"bc" : 1.0,
+	"bc": 1.0,
 
 	"ic_vx": [
 		{
-			"tl": [10,10],
-			"br": [20,20],
-			"value": 20.0
+			"tl": [100, 100],
+			"br": [200, 200],
+			"value": 0.5
 		}
 	],
 
 	"ic_cell": [
 		{
-			"tl": [30,30],
-			"br": [40,40],
+			"tl": [300, 300],
+			"br": [400, 400],
 			"value": 1.0
 		}
 	]
-
-
 }

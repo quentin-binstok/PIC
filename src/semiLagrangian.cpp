@@ -3,12 +3,14 @@
 #include "data.hpp"
 #include "nlohmann/json.hpp"
 #include "utils.hpp"
+
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
-#include <cstring>
 #include <fstream>
-#include <chrono>
+
 using json = nlohmann::json;
+
 /*
  @brief checks the validity of parameters (except boundary and initial
  conditions)
@@ -67,6 +69,7 @@ int check_params(json &data, std::ofstream &log_file) {
     }
     return EXIT_SUCCESS;
 }
+
 /*
  @brief Applies semi-lagrangian advection to the field q
  @param vx, vy: the velocity field
@@ -77,46 +80,68 @@ int check_params(json &data, std::ofstream &log_file) {
 inline int advect(scalar_field *vx, scalar_field *vy, float dt,
                   scalar_field *q_n, scalar_field *q_n1,
                   std::ofstream &log_file) {
+    LOG_INFO(log_file, "starting advecting " << q_n->name);
     unsigned int nx = q_n->nx, ny = q_n->ny;
     float x_int = q_n->x_internal, y_int = q_n->y_internal;
     float dx = q_n->dx;
+
     if (0)
         LOG_INFO(log_file, "test")
+
 #pragma omp parallel for collapse(2)
     for (unsigned int j = 0; j < ny; j++) {
         for (unsigned int i = 0; i < nx; i++) {
             // Interpolation of the speed field
             // coords where we need the speed field
             float x = (i + x_int) * dx, y = (j + y_int) * dx;
+
             // vx
             float v_x = 0;
             int x_1, x_2, y_1, y_2;
             x_1 = (int)(x / dx) - 1;
             x_1 = std::max(0, x_1);
+            if (x_1 > vx->nx - 1)
+                LOG_WARN(log_file, "x_1 too big")
             x_2 = x_1 + 1;
             x_2 = std::min(vx->nx - 1, x_2);
+
             y_1 = (int)(y / dx);
             y_1 = std::max(0, y_1);
+            y_1 = std::min(y_1, vx->ny - 2);
+            if (y_1 > vx->ny - 1)
+                LOG_WARN(log_file,
+                         "y_1 too big, y = " << y << " and y_1 = " << y_1)
             y_2 = y_1 + 1;
             y_2 = std::min(vx->ny - 1, y_2);
+
             v_x = interpolate_bilinear(
                 x, y, (x_1 + vx->x_internal) * dx, (y_1 + vx->y_internal) * dx,
                 GET(vx, x_1, y_1), GET(vx, x_2, y_1), GET(vx, x_1, y_2),
                 GET(vx, x_2, y_2), dx, dx);
+
             // vy
             float v_y = 0;
             x_1 = (int)(x / dx);
             x_1 = std::max(0, x_1);
+            x_1 = std::min(x_1, vy->nx - 2);
+            if (x_1 > vy->nx - 1)
+                LOG_WARN(log_file, "x_1 too big")
+
             x_2 = x_1 + 1;
             x_2 = std::min(vy->nx - 1, x_2);
+
             y_1 = (int)(y / dx) - 1;
             y_1 = std::max(0, y_1);
+            if (y_1 > vy->ny - 1)
+                LOG_WARN(log_file, "y_1 too big")
             y_2 = y_1 + 1;
             y_2 = std::min(vy->ny - 1, y_2);
+
             v_y = interpolate_bilinear(
                 x, y, (x_1 + vy->x_internal) * dx, (y_1 + vy->y_internal) * dx,
                 GET(vy, x_1, y_1), GET(vy, x_2, y_1), GET(vy, x_1, y_2),
                 GET(vy, x_2, y_2), dx, dx);
+
             // xp
             float xp_x = x - dt * v_x;
             float xp_y = y - dt * v_y;
@@ -124,14 +149,17 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
             xp_y = std::max((float)0, xp_y);
             xp_x = std::min(q_n->nx * dx, xp_x);
             xp_y = std::min(q_n->ny * dx, xp_y);
+
             x_1 = (int)(xp_x / dx);
             x_1 = std::max(0, x_1);
             x_2 = x_1 + 1;
             x_2 = std::min(q_n->nx - 1, x_2);
+
             y_1 = (int)(xp_y / dx);
             y_1 = std::max(0, y_1);
             y_2 = y_1 + 1;
             y_2 = std::min(q_n->ny - 1, y_2);
+
             // Get q at xp
             // vx
             float q_interp = 0;
@@ -139,6 +167,7 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
                 xp_x, xp_y, (x_1 + x_int) * dx, (y_1 + y_int) * dx,
                 GET(q_n, x_1, y_1), GET(q_n, x_2, y_1), GET(q_n, x_1, y_2),
                 GET(q_n, x_2, y_2), dx, dx);
+
             SET(q_n1, i, j, q_interp);
         }
     }
@@ -152,28 +181,53 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
  @param dx: the grid spacing
  @return the maximum divergence in the field, for logging purposes
 */
-inline int divergence(scalar_field *vx, scalar_field *vy, scalar_field *div, 
-                            float dx) {
+inline int divergence(scalar_field *vx, scalar_field *vy, scalar_field *div,
+                      std::ofstream &log_file) {
+    LOG_INFO(log_file, "Computing the divergence");
     int nx = div->nx;
     int ny = div->ny;
+    float dx = div->dx;
 
-    float maxDiv = 0.0;
-    #pragma omp parallel for collapse(2) reduction(max:maxDiv)
-    // div has the size of pressure so even when i = nx-1 or j = ny-1, we can safely access vx and vy
-    for (int j = 0; j < ny; j++) {
-        for (int i = 0; i < nx; i++) {
-            float dudx = (GET(vx, i+1, j) - GET(vx, i, j)) / dx;
-            float dvdy = (GET(vy, i, j+1) - GET(vy, i, j)) / dx;
+#pragma omp parallel for collapse(2)
+    // div has the size of pressure so even when i = nx-1 or j = ny-1, we can
+    // safely access vx and vy
+    for (int j = 1; j < ny; j++) {
+        for (int i = 1; i < nx; i++) {
+            float dudx = (GET(vx, i, j) - GET(vx, i - 1, j)) / dx;
+            float dvdy = (GET(vy, i, j) - GET(vy, i, j - 1)) / dx;
             float d = dudx + dvdy;
             SET(div, i, j, d);
-            maxDiv = std::max(maxDiv, std::abs(d));
         }
     }
+
+    int j = 0;
+    for (int i = 1; i < nx; i++) {
+        float dudx = (GET(vx, i, j) - GET(vx, i - 1, j)) / dx;
+        float dvdy = (GET(vy, i, j)) / dx;
+        float d = dudx + dvdy;
+        SET(div, i, j, d);
+    }
+
+    int i = 0;
+    for (int j = 1; j < ny; j++) {
+        float dudx = (GET(vx, i, j)) / dx;
+        float dvdy = (GET(vy, i, j) - GET(vy, i, j - 1)) / dx;
+        float d = dudx + dvdy;
+        SET(div, i, j, d);
+    }
+
+    float dudx = (GET(vx, 0, 0)) / dx;
+    float dvdy = (GET(vy, 0, 0)) / dx;
+    float d = dudx + dvdy;
+    SET(div, 0, 0, d);
+
+    LOG_INFO(log_file, "finished computing divergence")
     return EXIT_SUCCESS;
 }
 
 /*
- @brief solves the Poisson equation for the pressure using Gauss-Seidel iterations
+ @brief solves the Poisson equation for the pressure using Gauss-Seidel
+ iterations
  @param p: the pressure field
  @param vx, vy: the velocity field
  @param div: the divergence field
@@ -181,25 +235,72 @@ inline int divergence(scalar_field *vx, scalar_field *vy, scalar_field *div,
  @param dt: the time step
  @param rho: the density
 */
-inline int gauss_seidel(scalar_field *p, scalar_field *div, scalar_field *dom, 
-                    float dx, float dt, float rho, std::ofstream &log_file) {
-    int nx = p->nx;  
+inline int gauss_seidel(scalar_field *p, scalar_field *div, scalar_field *vx,
+                        scalar_field *vy, scalar_field *dom, float tol,
+                        float dt, float rho, int max_iter,
+                        std::ofstream &log_file) {
+    int nx = p->nx;
     int ny = p->ny;
+    float dx = dom->dx;
     const float alpha = dx * dx * rho / dt;
+    float beta = rho * dx / dt;
     float maxPdiff = 1.0;
     int iter = 0;
 
-    while (maxPdiff > 1e-3 && iter < 10000) { 
+    while (maxPdiff > tol && iter < max_iter) {
         maxPdiff = 0.0;
-        #pragma omp parallel for collapse(2) reduction(max:maxPdiff)
-        for (int j =0; j < ny; j++) {
-            for (int i = 0;i < nx ; i++) {
-                float p_left  = (GET(dom,i,j+1)==1.0) ? GET(p,i,j) : GET(p,i-1,j);
-                float p_right = (GET(dom,i+2,j+1)==1.0) ? GET(p,i,j) : GET(p,i+1,j);
-                float p_down  = (GET(dom,i+1,j)==1.0) ? GET(p,i,j) : GET(p,i,j-1);
-                float p_up    = (GET(dom,i+1,j+2)==1.0) ? GET(p,i,j) : GET(p,i,j+1);
+#pragma omp parallel for collapse(2) reduction(max : maxPdiff)
+        for (int j = 0; j < ny; j++) {
+            for (int i = 0; i < nx; i++) {
+                if (GET(dom, i + 1, j + 1) == SOLID)
+                    continue;
 
-                float new_p = (p_left + p_right + p_down + p_up - alpha * GET(div, i, j)) / 4.0;
+                float dom_left = GET(dom, i, j + 1);
+                float p_left = 0;
+                // need to extrapolate the speed
+                if (i == 0) {
+                    // p_left = GET(p, i, j) -
+                    //          beta * (2 * GET(vx, i, j) - GET(vx, i + 1, j));
+                    p_left = GET(p, i, j);
+                } else if (dom_left == LIQUID) {
+                    p_left = GET(p, i - 1, j);
+                } else if (dom_left == SOLID) {
+                    p_left = GET(p, i, j) - beta * GET(vx, i - 1, j);
+                }
+
+                float dom_right = GET(dom, i + 2, j + 1);
+                float p_right = 0;
+                // no need to extrapolate due to convention
+                if (dom_right == LIQUID) {
+                    p_right = GET(p, i + 1, j);
+                } else if (dom_right == SOLID) {
+                    p_right = GET(p, i, j) + beta * GET(vx, i, j);
+                }
+
+                float dom_down = GET(dom, i + 1, j);
+                float p_down = 0;
+                if (j == 0) {
+                    // p_down = GET(p, i, j) -
+                    //          beta * (2 * GET(vy, i, j) - GET(vy, i, j + 1));
+                    p_down = GET(p, i, j);
+                } else if (dom_down == LIQUID) {
+                    p_down = GET(p, i, j - 1);
+                } else if (dom_down == SOLID) {
+                    p_down = GET(p, i, j) - beta * GET(vy, i, j - 1);
+                }
+
+                float dom_up = GET(dom, i + 1, j + 2);
+                float p_up = 0;
+                // no need to extrapolate due to convention
+                if (dom_up == LIQUID) {
+                    p_up = GET(p, i, j + 1);
+                } else if (dom_up == SOLID) {
+                    p_up = GET(p, i, j) + beta * GET(vy, i, j);
+                }
+
+                float new_p = (p_left + p_right + p_down + p_up -
+                               alpha * GET(div, i, j)) /
+                              4.0;
                 float Pdiff = std::abs(new_p - GET(p, i, j));
                 maxPdiff = std::max(maxPdiff, Pdiff);
                 SET(p, i, j, new_p);
@@ -207,7 +308,13 @@ inline int gauss_seidel(scalar_field *p, scalar_field *div, scalar_field *dom,
         }
         iter++;
     }
-    LOG_INFO(log_file, "Poisson equation solved with Gauss-Seidel iterations, max pressure difference: " << maxPdiff);
+    if (iter == max_iter)
+        LOG_WARN(log_file,
+                 "Gauss Seidel stopped at " << max_iter << " iterations")
+    LOG_INFO(log_file, "Gauss seidel converged in " << iter << " iterations");
+    LOG_INFO(log_file, "Poisson equation solved with Gauss-Seidel iterations, "
+                       "max pressure difference: "
+                           << maxPdiff);
     return EXIT_SUCCESS;
 }
 
@@ -218,19 +325,21 @@ inline int gauss_seidel(scalar_field *p, scalar_field *div, scalar_field *dom,
  @param dt: the time step
  @param rho: the density
 */
-inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy, scalar_field *dom,
-                           float dx, float dt, float rho, std::ofstream &log_file) {
+inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
+                            scalar_field *dom, float dx, float dt, float rho,
+                            std::ofstream &log_file) {
     int vx_nx = vx->nx;
     int vx_ny = vx->ny;
 
-    #pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2)
     for (int j = 0; j < vx_ny; j++) {
         for (int i = 0; i < vx_nx; i++) {
-            if (GET(dom, i, j+1) == 1.0 || GET(dom, i+1, j+1) == 1.0) { 
+            if (GET(dom, i + 2, j + 1) == SOLID ||
+                GET(dom, i + 1, j + 1) == SOLID) {
                 SET(vx, i, j, 0.0);
-                continue; 
+                continue;
             }
-            float gradp_x = (GET(p, i, j) - GET(p, i-1, j)) / dx;
+            float gradp_x = (GET(p, i + 1, j) - GET(p, i, j)) / dx;
             SET(vx, i, j, GET(vx, i, j) - dt * gradp_x / rho);
         }
     }
@@ -238,28 +347,31 @@ inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
     int vy_nx = vy->nx;
     int vy_ny = vy->ny;
 
-    #pragma omp parallel for collapse(2)
-    for (int j = 0; j < vy_ny; j++) { 
+#pragma omp parallel for collapse(2)
+    for (int j = 0; j < vy_ny; j++) {
         for (int i = 0; i < vy_nx; i++) {
-            if (GET(dom, i+1, j) == 1.0 || GET(dom, i+1, j+1) == 1.0) { 
+            if (GET(dom, i + 1, j + 2) == SOLID ||
+                GET(dom, i + 1, j + 1) == SOLID) {
                 SET(vy, i, j, 0.0);
-                continue; 
+                continue;
             }
-            float gradp_y = (GET(p, i, j) - GET(p, i, j-1)) / dx;
+            float gradp_y = (GET(p, i, j + 1) - GET(p, i, j)) / dx;
             SET(vy, i, j, GET(vy, i, j) - dt * gradp_y / rho);
         }
     }
     LOG_INFO(log_file, "Velocity field projected to be divergence free");
     return EXIT_SUCCESS;
 }
+
 /*
  @brief the semi lagrangian solver
  @param data: the whole json
  @param log_file: the log file
 */
 int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
-    auto t0 = std::chrono::high_resolution_clock::now();
     LOG_INFO(log_file, "Starting the semi-lagrangian solver");
+
+    auto t0 = std::chrono::high_resolution_clock::now();
 
     if (check_params(data, log_file)) {
         LOG_ERR(log_file, "Problem checking the input parameters")
@@ -271,14 +383,15 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     const float dx = data["space_steps"];
     const int sampling_rate = data["sampling_rate"];
 
-
     // Initialising the fields
-    scalar_field *vx = scalar_field_init("vx", nx+1, ny, 0.5, 0, dx, log_file);
-    scalar_field *vy = scalar_field_init("vy", nx, ny + 1, 0, 0.5, dx, log_file);
+    scalar_field *vx =
+        scalar_field_init("vx", nx + 1, ny, 0.5, 0, dx, log_file);
+    scalar_field *vy =
+        scalar_field_init("vy", nx, ny + 1, 0, 0.5, dx, log_file);
     scalar_field *p = scalar_field_init("p", nx, ny, 0, 0, dx, log_file);
     scalar_field *div = scalar_field_init("div", nx, ny, 0, 0, dx, log_file);
-    scalar_field *dom = scalar_field_init("dom", nx+2, ny+2, 0, 0, dx, log_file);
-
+    scalar_field *dom =
+        scalar_field_init("dom", nx + 2, ny + 2, 0, 0, dx, log_file);
 
     if (!vx || !vy || !p || !div || !dom) {
         LOG_ERR(log_file, "An error occured initializing fields.");
@@ -287,7 +400,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
 
     // Applying the initial conditions
     initialize_domain(dom, data, "ic_cell", log_file);
-    initialize_vx(vx, dom, data, "ic_vx", log_file);
+    initialize_speed(vx, dom, data, "ic_vx", log_file);
 
     float dt = 0.1;
     if (data.contains("delta_t"))
@@ -296,21 +409,39 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     unsigned int nt = 10;
     if (data.contains("nt"))
         nt = data["nt"];
-    
+
     float rho = 1.0;
     if (data.contains("rho"))
         rho = data["rho"];
+
+    float tol = 1e-5;
+    if (data.contains("tol"))
+        tol = data["tol"];
+
+    int max_iter = 1e5;
+    if (data.contains("max_iter"))
+        max_iter = data["max_iter"];
 
     scalar_field *temp_vx = scalar_field_copy(vx, log_file);
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
     scalar_field *temp_p = scalar_field_copy(p, log_file);
 
+    write_scalar_vtk(vx, 0, 0, log_file);
+    write_scalar_vtk(vy, 0, 0, log_file);
+    write_scalar_vtk(p, 0, 0, log_file);
+    write_scalar_vtk(div, 0, 0, log_file);
+
     // Main time loop
     bool inverted = false;
-    for (unsigned int i = 0; i < nt; i++) {
+    for (unsigned int i = 1; i < nt; i++) {
         LOG_INFO(log_file, "Starting time loop " << i << " out of " << nt);
 
-        // save files
+        divergence(vx, vy, div, log_file);
+        gauss_seidel(p, div, vx, vy, dom, tol, dt, rho, max_iter, log_file);
+        project_velocity(p, vx, vy, dom, dx, dt, rho, log_file);
+        divergence(vx, vy, div, log_file);
+
+        // save files, when the divergence is zero
         if (sampling_rate && !(i % sampling_rate)) {
             write_scalar_vtk(vx, i, 0, log_file);
             write_scalar_vtk(vy, i, 0, log_file);
@@ -318,17 +449,12 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
             write_scalar_vtk(div, i, 0, log_file);
         }
 
-        divergence(vx, vy, div, dx);
-
-        gauss_seidel(p, div, dom, dx, dt, rho, log_file);
-
-        project_velocity(p, vx, vy, dom, dx, dt, rho, log_file);
+        LOG_INFO(log_file, "starting advection part");
 
         // advect
         advect(vx, vy, dt, vx, temp_vx, log_file);
         advect(vx, vy, dt, vy, temp_vy, log_file);
         advect(vx, vy, dt, p, temp_p, log_file);
-
 
         inverted = !inverted;
         scalar_field *invert_vx = vx;
@@ -342,7 +468,6 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
         temp_vx = invert_vx;
         temp_vy = invert_vy;
         temp_p = invert_p;
-
     }
 
     write_manifest_vtk(vx->name, dt, nt, sampling_rate, 1, 0, log_file);
