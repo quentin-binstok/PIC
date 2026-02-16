@@ -1,22 +1,31 @@
 {
-	"s": 0.05,
-	"nstepT": 5,
-	"o": [0.0, 0.0, 0.0],
-	"L": [1.0, 2.0, 3.0],
+	"solver": "semi-lagrangian",
+	"grid": [50,50],
+	"space_steps": 0.1,
+	"nt": 20,
+	"delta_t": 0.1,
+	"sampling_rate": 1,
+	"rho": 1000.0,
 
 	"log_file": "log.txt",
-	"bc": [
+
+	"bc" : 1.0,
+
+	"ic_vx": [
 		{
-			"start": [0, 0],
-			"end": [2, 0],
-			"type": "border or open",
-			"speed": 0.5,
-			"pressure": 6
-		},
+			"tl": [10,10],
+			"br": [20,20],
+			"value": 20.0
+		}
+	],
+
+	"ic_cell": [
 		{
-			"start": [2, 0],
-			"end": [2, 2],
-			"type": "border or open"
+			"tl": [30,30],
+			"br": [40,40],
+			"value": 1.0
 		}
 	]
+
+
 }

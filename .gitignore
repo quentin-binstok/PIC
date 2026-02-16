@@ -1,3 +1,4 @@
+
 CMakeCache.txt
 *.cmake
 Makefile
@@ -8,3 +9,6 @@ build/
 .cache/
 *.pvd
 data/
+todo.md
+*.mp4
+.clang-format
