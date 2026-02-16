@@ -11,7 +11,7 @@
 #include "nlohmann/json.hpp"
 
 #include "data.hpp"
-#include "semi-lagrangian.hpp"
+#include "semiLagrangian.hpp"
 #include "utils.hpp"
 
 using json = nlohmann::json;

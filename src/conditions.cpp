@@ -20,17 +20,6 @@ int initialize_domain(scalar_field *field, json &data,
     LOG_INFO(log_file, "Applying initial domain " << condition_name << " on "
                                                      << field->name);
 
-    // Checking that condition is an array
-    if (data.contains(condition_name) && data[condition_name].type() != json::value_t::array) {
-        LOG_ERR(log_file, "Condition " << condition_name << " is not an array");
-        return EXIT_FAILURE;
-    }
-    // Checking that condition is the correct one
-    if (condition_name == "ic_cell" && !data[condition_name].size()) {
-        LOG_ERR(log_file, "Condition " << condition_name << " is not the correct one");
-        return EXIT_FAILURE;
-    }
-
     auto condition = data[condition_name];
     int nx = field->nx, ny = field->ny;
 

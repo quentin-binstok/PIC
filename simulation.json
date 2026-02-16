@@ -1,8 +1,8 @@
 {
 	"solver": "semi-lagrangian",
-	"grid": [100,100],
+	"grid": [50,50],
 	"space_steps": 0.1,
-	"nt": 100,
+	"nt": 20,
 	"delta_t": 0.1,
 	"sampling_rate": 1,
 	"rho": 1000.0,
@@ -13,9 +13,11 @@
 
 	"ic_vx": [
 		{
-			"tl": [25,25],
-			"br": [60, 60],
+			"tl": [10,10],
+			"br": [20,20],
 			"value": 10.0
 		}
 	]
+
+
 }

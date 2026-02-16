@@ -175,6 +175,7 @@ inline int divergence(scalar_field *vx, scalar_field *vy, scalar_field *div,
 /*
  @brief solves the Poisson equation for the pressure using Gauss-Seidel iterations
  @param p: the pressure field
+ @param vx, vy: the velocity field
  @param div: the divergence field
  @param dx: the grid spacing
  @param dt: the time step
@@ -186,33 +187,25 @@ inline int gauss_seidel(scalar_field *p, scalar_field *div, scalar_field *dom,
     int ny = p->ny;
     const float alpha = dx * dx * rho / dt;
     float maxPdiff = 1.0;
+
     
-    while (maxPdiff > 1e-3) { 
+    while (maxPdiff > 1e-4) { 
         maxPdiff = 0.0;
         #pragma omp parallel for collapse(2) reduction(max:maxPdiff)
         for (int j = 0; j < ny; j++) {
             for (int i = 0; i < nx; i++) {
                 float sum = 0.0;
                 int count = 0;
-                
-                if (GET(dom, i, j+1) == 0.0) { // Liquid cell on the left  
-                    sum += GET(p, i-1, j);
-                    ++count;
-                }
-                if (GET(dom, i+2, j+1) == 0.0) { // Liquid cell on the right
-                    sum += GET(p, i+1, j);
-                    ++count;
-                }
-                if (GET(dom, i+1, j) == 0.0) { // Liquid cell below  
-                    sum += GET(p, i, j-1);
-                    ++count;
-                }
-                if (GET(dom, i+1, j+2) == 0.0) { // Liquid cell above
-                    sum += GET(p, i, j+1);
-                    ++count;
-                }
-                
-                if (count > 0) { 
+
+                if (GET(dom, i, j+1) == 0.0) { sum += GET(p, i-1, j); count++;}
+
+                if (GET(dom, i+2, j+1) == 0.0) { sum += GET(p, i+1, j); count++; }
+
+                if (GET(dom, i+1, j) == 0.0) { sum += GET(p, i, j-1); count++; }
+
+                if (GET(dom, i+1, j+2) == 0.0) { sum += GET(p, i, j+1); count++; }
+
+                if (count > 0) {
                     sum = (sum - alpha * GET(div, i, j)) / count;
                     float Pdiff = std::abs(sum - GET(p, i, j));
                     maxPdiff = std::max(maxPdiff, Pdiff);
@@ -240,9 +233,8 @@ inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
     #pragma omp parallel for collapse(2)
     for (int j = 0; j < vx_ny; j++) {
         for (int i = 0; i < vx_nx; i++) {
-            if (GET(dom, i+1, j+1) == 1.0 || GET(dom, i, j+1) == 1.0) {
-                    continue; // Skip solid cells
-                }
+            if (GET(dom, i, j+1) == 1.0 || GET(dom, i+1, j+1) == 1.0)
+                continue; // skip if adjacent to a solid cell
             float gradp_x = (GET(p, i, j) - GET(p, i-1, j)) / dx;
             SET(vx, i, j, GET(vx, i, j) - dt * gradp_x / rho);
         }
@@ -254,9 +246,8 @@ inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
     #pragma omp parallel for collapse(2)
     for (int j = 0; j < vy_ny; j++) { 
         for (int i = 0; i < vy_nx; i++) {
-            if (GET(dom, i+1, j+1) == 1.0 || GET(dom, i+1, j) == 1.0) {
-                    continue; // Skip solid cells
-                }
+            if (GET(dom, i+1, j) == 1.0 || GET(dom, i+1, j+1) == 1.0)
+                continue; // skip if adjacent to a solid cell
             float gradp_y = (GET(p, i, j) - GET(p, i, j-1)) / dx;
             SET(vy, i, j, GET(vy, i, j) - dt * gradp_y / rho);
         }
@@ -285,7 +276,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
 
 
     // Initialising the fields
-    scalar_field *vx = scalar_field_init("vx", nx + 1, ny, 0.5, 0, dx, log_file);
+    scalar_field *vx = scalar_field_init("vx", nx+1, ny, 0.5, 0, dx, log_file);
     scalar_field *vy = scalar_field_init("vy", nx, ny + 1, 0, 0.5, dx, log_file);
     scalar_field *p = scalar_field_init("p", nx, ny, 0, 0, dx, log_file);
     scalar_field *div = scalar_field_init("div", nx, ny, 0, 0, dx, log_file);
@@ -298,7 +289,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     }
 
     // Applying the initial conditions
-    initialize_domain(dom, data, "domain", log_file);
+    initialize_domain(dom, data, "ic_cell", log_file);
     initialize_vx(vx, dom, data, "ic_vx", log_file);
 
     float dt = 0.1;
