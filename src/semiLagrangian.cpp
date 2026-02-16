@@ -187,32 +187,25 @@ inline int gauss_seidel(scalar_field *p, scalar_field *div, scalar_field *dom,
     int ny = p->ny;
     const float alpha = dx * dx * rho / dt;
     float maxPdiff = 1.0;
+    int iter = 0;
 
-    
-    while (maxPdiff > 1e-4) { 
+    while (maxPdiff > 1e-3 && iter < 10000) { 
         maxPdiff = 0.0;
         #pragma omp parallel for collapse(2) reduction(max:maxPdiff)
-        for (int j = 0; j < ny; j++) {
-            for (int i = 0; i < nx; i++) {
-                float sum = 0.0;
-                int count = 0;
+        for (int j =0; j < ny; j++) {
+            for (int i = 0;i < nx ; i++) {
+                float p_left  = (GET(dom,i,j+1)==1.0) ? GET(p,i,j) : GET(p,i-1,j);
+                float p_right = (GET(dom,i+2,j+1)==1.0) ? GET(p,i,j) : GET(p,i+1,j);
+                float p_down  = (GET(dom,i+1,j)==1.0) ? GET(p,i,j) : GET(p,i,j-1);
+                float p_up    = (GET(dom,i+1,j+2)==1.0) ? GET(p,i,j) : GET(p,i,j+1);
 
-                if (GET(dom, i, j+1) == 0.0) { sum += GET(p, i-1, j); count++;}
-
-                if (GET(dom, i+2, j+1) == 0.0) { sum += GET(p, i+1, j); count++; }
-
-                if (GET(dom, i+1, j) == 0.0) { sum += GET(p, i, j-1); count++; }
-
-                if (GET(dom, i+1, j+2) == 0.0) { sum += GET(p, i, j+1); count++; }
-
-                if (count > 0) {
-                    sum = (sum - alpha * GET(div, i, j)) / count;
-                    float Pdiff = std::abs(sum - GET(p, i, j));
-                    maxPdiff = std::max(maxPdiff, Pdiff);
-                    SET(p, i, j, sum);
-                }
+                float new_p = (p_left + p_right + p_down + p_up - alpha * GET(div, i, j)) / 4.0;
+                float Pdiff = std::abs(new_p - GET(p, i, j));
+                maxPdiff = std::max(maxPdiff, Pdiff);
+                SET(p, i, j, new_p);
             }
         }
+        iter++;
     }
     LOG_INFO(log_file, "Poisson equation solved with Gauss-Seidel iterations, max pressure difference: " << maxPdiff);
     return EXIT_SUCCESS;
@@ -233,8 +226,10 @@ inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
     #pragma omp parallel for collapse(2)
     for (int j = 0; j < vx_ny; j++) {
         for (int i = 0; i < vx_nx; i++) {
-            if (GET(dom, i, j+1) == 1.0 || GET(dom, i+1, j+1) == 1.0)
-                continue; // skip if adjacent to a solid cell
+            if (GET(dom, i, j+1) == 1.0 || GET(dom, i+1, j+1) == 1.0) { 
+                SET(vx, i, j, 0.0);
+                continue; 
+            }
             float gradp_x = (GET(p, i, j) - GET(p, i-1, j)) / dx;
             SET(vx, i, j, GET(vx, i, j) - dt * gradp_x / rho);
         }
@@ -246,8 +241,10 @@ inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
     #pragma omp parallel for collapse(2)
     for (int j = 0; j < vy_ny; j++) { 
         for (int i = 0; i < vy_nx; i++) {
-            if (GET(dom, i+1, j) == 1.0 || GET(dom, i+1, j+1) == 1.0)
-                continue; // skip if adjacent to a solid cell
+            if (GET(dom, i+1, j) == 1.0 || GET(dom, i+1, j+1) == 1.0) { 
+                SET(vy, i, j, 0.0);
+                continue; 
+            }
             float gradp_y = (GET(p, i, j) - GET(p, i, j-1)) / dx;
             SET(vy, i, j, GET(vy, i, j) - dt * gradp_y / rho);
         }
