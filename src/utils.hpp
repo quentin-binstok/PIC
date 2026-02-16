@@ -23,4 +23,8 @@
 float interpolate_bilinear(float x, float y, float x1, float y1, float q11,
                            float q21, float q12, float q22, float Dx, float Dy);
 
+float interpolate_bilinear(int x, int y, int x1, int y1, float q11, 
+                           float q21, float q12, float q22,
+                           float Dx, float Dy);
+
 #endif
