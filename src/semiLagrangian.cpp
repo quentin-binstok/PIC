@@ -1,4 +1,3 @@
-
 #include "conditions.hpp"
 #include "data.hpp"
 #include "nlohmann/json.hpp"
@@ -17,6 +16,7 @@ using json = nlohmann::json;
  conditions)
  @param data: the whole data json
  @param log_file: the log file
+ TODO: expand this with the new options
 */
 int check_params(json &data, std::ofstream &log_file) {
     LOG_INFO(log_file, "Checking the input parameters");
@@ -81,13 +81,10 @@ int check_params(json &data, std::ofstream &log_file) {
 inline int advect(scalar_field *vx, scalar_field *vy, float dt,
                   scalar_field *q_n, scalar_field *q_n1,
                   std::ofstream &log_file) {
-    LOG_INFO(log_file, "starting advecting " << q_n->name);
+    LOG_INFO(log_file, "Advecting field " << q_n->name);
     unsigned int nx = q_n->nx, ny = q_n->ny;
     float x_int = q_n->x_internal, y_int = q_n->y_internal;
     float dx = q_n->dx;
-
-    if (0)
-        LOG_INFO(log_file, "test")
 
 #pragma omp parallel for collapse(2)
     for (unsigned int j = 0; j < ny; j++) {
@@ -172,6 +169,7 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
             SET(q_n1, i, j, q_interp);
         }
     }
+
     return EXIT_SUCCESS;
 }
 
@@ -222,24 +220,29 @@ inline int divergence(scalar_field *vx, scalar_field *vy, scalar_field *div,
     float d = dudx + dvdy;
     SET(div, 0, 0, d);
 
-    LOG_INFO(log_file, "finished computing divergence")
     return EXIT_SUCCESS;
 }
 
 /*
- @brief solves the Poisson equation for the pressure using Gauss-Seidel
+ @brief solves the Poisson equation for the pressure using Jacobi
  iterations
  @param p: the pressure field
- @param vx, vy: the velocity field
+ @param temp_p: a temporary pressure field needed to work
  @param div: the divergence field
- @param dx: the grid spacing
+ @param vx, vy: the velocity field
+ @param dom: the domain field
+ @param tol: the tolerance at which to stop
  @param dt: the time step
  @param rho: the density
+ @param max_iter: the max number of iterations
+ @param first_looop: whether this is the first time loop or not
 */
 inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
                   scalar_field *vx, scalar_field *vy, scalar_field *dom,
                   float tol, float dt, float rho, int max_iter, bool first_loop,
                   std::ofstream &log_file) {
+    LOG_INFO(log_file, "Starting Jacobi");
+
     int nx = p->nx;
     int ny = p->ny;
     float dx = dom->dx;
@@ -248,6 +251,7 @@ inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
     float maxPdiff = 1.0;
     int iter = 0;
 
+    // as it's the one that has problems converging, putting this really high
     if (first_loop) {
         max_iter = nx * ny;
     }
@@ -319,6 +323,8 @@ inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
             }
         }
 
+        // removing the mean of the pressure, so that we can use Neumann conds
+        // only, instead of having to fix the pressure somewhere
         float sum = 0;
         for (int j = 0; j < ny; j++)
             for (int i = 0; i < nx; i++)
@@ -329,20 +335,22 @@ inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
             for (int i = 0; i < nx; i++)
                 SET(temp_p, i, j, GET(temp_p, i, j) - mean);
 
+        // as we updated temp_p, we need to invert
         scalar_field *tmp = p;
         p = temp_p;
         temp_p = tmp;
         inverted = !inverted;
         iter++;
     }
-    if (iter == max_iter)
-        LOG_WARN(log_file,
-                 "Gauss Seidel stopped at " << max_iter << " iterations")
-    LOG_INFO(log_file, "Gauss seidel converged in " << iter << " iterations");
-    LOG_INFO(log_file, "Poisson equation solved with Gauss-Seidel iterations, "
-                       "max pressure difference: "
-                           << maxPdiff);
 
+    if (iter == max_iter)
+        LOG_WARN(log_file, "Jacobi stopped at " << max_iter << " iterations")
+    else
+        LOG_INFO(log_file, "Jacobi converged in " << iter << " iterations");
+    LOG_INFO(log_file, "Max pressure difference: " << maxPdiff);
+
+    // to make sure that p has the right information for the rest of the time
+    // loop
     if (inverted) {
         scalar_field *tmp = p;
         p = temp_p;
@@ -352,9 +360,23 @@ inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
     return EXIT_SUCCESS;
 }
 
+/*
+ @brief solves the Poisson equation for the pressure using SOR
+ iterations
+ @param p: the pressure field
+ @param div: the divergence field
+ @param vx, vy: the velocity field
+ @param dom: the domain field
+ @param tol: the tolerance at which to stop
+ @param dt: the time step
+ @param rho: the density
+ @param max_iter: the max number of iterations
+*/
 inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                scalar_field *vy, scalar_field *dom, float tol, float dt,
                float rho, int max_iter, std::ofstream &log_file) {
+    LOG_INFO(log_file, "Starting SOR")
+
     int nx = p->nx;
     int ny = p->ny;
     float dx = dom->dx;
@@ -363,6 +385,7 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
     float maxPdiff = 1.0;
     int iter = 0;
 
+    // parameters needed for the algorithm
     const int N = std::min(nx, ny);
     const float pi = 3.14159265358979;
     const float omega = std::min(1.95f, 2.0f / (1.0f + std::sin(pi / N)));
@@ -372,7 +395,10 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                               1.0f) &&
            iter < max_iter) {
         maxPdiff = 0.0;
+
+        // to be able to parallelize, need checkered grids
         for (int color = 0; color < 2; color++) {
+
 #pragma omp parallel for collapse(2) reduction(max : maxPdiff)
             for (int j = 0; j < ny; j++) {
                 for (int i = 0; i < nx; i++) {
@@ -440,6 +466,9 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                 }
             }
         }
+
+        // Need to remove the mean pressure, so that we have a condition in
+        // addition to the Neumann ones
         float sum = 0;
 #pragma omp parallel for collapse(2) reduction(+ : sum)
         for (int j = 0; j < ny; j++)
@@ -451,15 +480,15 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
         for (int j = 0; j < ny; j++)
             for (int i = 0; i < nx; i++)
                 SET(p, i, j, GET(p, i, j) - mean);
+
         iter++;
     }
+
     if (iter == max_iter)
-        LOG_WARN(log_file,
-                 "Gauss Seidel stopped at " << max_iter << " iterations")
-    LOG_INFO(log_file, "Gauss seidel converged in " << iter << " iterations");
-    LOG_INFO(log_file, "Poisson equation solved with Gauss-Seidel iterations, "
-                       "max pressure difference: "
-                           << maxPdiff);
+        LOG_WARN(log_file, "SOR stopped at " << max_iter << " iterations")
+    else
+        LOG_INFO(log_file, "SOR converged in " << iter << " iterations");
+    LOG_INFO(log_file, "Max pressure difference: " << maxPdiff);
 
     return EXIT_SUCCESS;
 }
@@ -474,6 +503,8 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
 inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
                             scalar_field *dom, float dx, float dt, float rho,
                             std::ofstream &log_file) {
+    LOG_INFO(log_file, "Projecting the velocity field")
+
     int vx_nx = vx->nx;
     int vx_ny = vx->ny;
     int p_nx = p->nx;
@@ -514,7 +545,7 @@ inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
             SET(vy, i, j, GET(vy, i, j) - dt * gradp_y / rho);
         }
     }
-    LOG_INFO(log_file, "Velocity field projected to be divergence free");
+
     return EXIT_SUCCESS;
 }
 
@@ -556,7 +587,9 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     // Applying the initial conditions
     initialize_domain(dom, data, "ic_cell", log_file);
     initialize_speed(vx, dom, data, "ic_vx", log_file);
+    initialize_speed(vy, dom, data, "ic_vy", log_file);
 
+    // Getting parameters
     float dt = 0.1;
     if (data.contains("delta_t"))
         dt = data["delta_t"];
@@ -579,13 +612,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
 
     scalar_field *temp_vx = scalar_field_copy(vx, log_file);
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
-    // scalar_field *temp_p = scalar_field_copy(p, log_file);
-
-    // Initializing p
-    // divergence(vx, vy, div, log_file);
-    // for (unsigned int j = 0; j < ny; j++)
-    //     for (unsigned int i = 0; i < nx; i++)
-    //         SET(p, i, j, GET(div, i, j) * dx * dx);
+    scalar_field *temp_p = scalar_field_copy(p, log_file);
 
     write_scalar_vtk(vx, 0, 0, log_file);
     write_scalar_vtk(vy, 0, 0, log_file);
@@ -594,12 +621,15 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
 
     // Main time loop
     bool inverted = false;
-    // bool first_loop = true;
+    bool first_loop = true;
     for (unsigned int i = 1; i < nt; i++) {
+        log_file << "\n";
         LOG_INFO(log_file, "Starting time loop " << i << " out of " << nt);
 
         divergence(vx, vy, div, log_file);
 
+        // Making sure that the mean of the divergence is zero
+        // Comes from an integral condition to have a solution
         float sum = 0;
         for (unsigned int j = 0; j < ny; j++)
             for (unsigned int i = 0; i < nx; i++)
@@ -611,11 +641,19 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
             for (unsigned int i = 0; i < nx; i++)
                 SET(div, i, j, GET(div, i, j) - mean);
 
-        // jacobi(p, temp_p, div, vx, vy, dom, tol, dt, rho, max_iter,
-        // first_loop,
-        //        log_file);
-        sor(p, div, vx, vy, dom, tol, dt, rho, max_iter, log_file);
+        if (data["iteration_algo"] == "Jacobi")
+            jacobi(p, temp_p, div, vx, vy, dom, tol, dt, rho, max_iter,
+                   first_loop, log_file);
+        else if (data["iteration_algo"] == "SOR")
+            sor(p, div, vx, vy, dom, tol, dt, rho, max_iter, log_file);
+        else {
+            LOG_ERR(log_file, "Iteration algorithm not supported");
+            return EXIT_FAILURE;
+        }
+
         project_velocity(p, vx, vy, dom, dx, dt, rho, log_file);
+
+        // This is to be able to save it. It serves no purpose in the algorithm
         divergence(vx, vy, div, log_file);
 
         // save files, when the divergence is zero
@@ -626,27 +664,23 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
             write_scalar_vtk(div, i, 0, log_file);
         }
 
-        LOG_INFO(log_file, "starting advection part");
-
         // advect
         advect(vx, vy, dt, vx, temp_vx, log_file);
         advect(vx, vy, dt, vy, temp_vy, log_file);
-        // advect(vx, vy, dt, p, temp_p, log_file);
 
         inverted = !inverted;
         scalar_field *invert_vx = vx;
         scalar_field *invert_vy = vy;
-        // scalar_field *invert_p = p;
 
         vx = temp_vx;
         vy = temp_vy;
-        // p = temp_p;
 
         temp_vx = invert_vx;
         temp_vy = invert_vy;
-        // temp_p = invert_p;
 
-        // first_loop = false;
+        first_loop = false;
+
+        // Resetting the pressure field
 #pragma omp parallel for collapse(2)
         for (unsigned int j = 0; j < ny; j++)
             for (unsigned int i = 0; i < nx; i++)
@@ -666,7 +700,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
 
     scalar_field_free(temp_vx, log_file);
     scalar_field_free(temp_vy, log_file);
-    // scalar_field_free(temp_p, log_file);
+    scalar_field_free(temp_p, log_file);
 
     auto t1 = std::chrono::high_resolution_clock::now();
     double seconds = std::chrono::duration<double>(t1 - t0).count();

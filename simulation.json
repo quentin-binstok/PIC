@@ -1,8 +1,9 @@
 {
 	"solver": "semi-lagrangian",
-	"grid": [500, 500],
+	"iteration_algo": "SOR",
+	"grid": [800, 300],
 	"space_steps": 0.1,
-	"nt": 300,
+	"nt": 150,
 	"delta_t": 0.1,
 	"sampling_rate": 1,
 	"rho": 1000.0,
@@ -23,8 +24,8 @@
 
 	"ic_cell": [
 		{
-			"tl": [300, 125],
-			"br": [350, 175],
+			"tl": [250, 125],
+			"br": [300, 175],
 			"value": 1.0
 		}
 	]

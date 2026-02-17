@@ -50,6 +50,7 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
                                 const float y_internal, const float dx,
                                 std::ofstream &log_file);
 
+// Does not copy the values
 scalar_field *scalar_field_copy(const scalar_field *field,
                                 std::ofstream &log_file);
 

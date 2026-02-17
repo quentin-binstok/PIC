@@ -10,32 +10,31 @@ using json = nlohmann::json;
 
 /*
  @brief Applies some initial conditions to the scalar field
- @param scalar_field: the field to which apply the conditions
+ @param scalar_field: the field to which apply the conditions (the domain)
  @param data: the full input json
  @param condition_name: the name of the initial condition in the json
  @param log_file: the log file
 */
-
-int initialize_domain(scalar_field *field, json &data,
-                      std::string condition_name, std::ofstream &log_file) {
+int initialize_domain(scalar_field *dom, json &data, std::string condition_name,
+                      std::ofstream &log_file) {
     LOG_INFO(log_file, "Applying initial domain " << condition_name << " on "
-                                                  << field->name);
+                                                  << dom->name);
 
     auto condition = data[condition_name];
-    int nx = field->nx, ny = field->ny;
+    int nx = dom->nx, ny = dom->ny;
 
-    // First we set the bc
+    // First we set the bc, around the domain
     CELL_TYPE value = SOLID;
     if (data.contains("bc")) {
         value = data["bc"];
     }
     for (int j = 0; j < ny; j++) {
-        SET(field, 0, j, value);
-        SET(field, nx - 1, j, value);
+        SET(dom, 0, j, value);
+        SET(dom, nx - 1, j, value);
     }
     for (int i = 0; i < nx; i++) {
-        SET(field, i, 0, value);
-        SET(field, i, ny - 1, value);
+        SET(dom, i, 0, value);
+        SET(dom, i, ny - 1, value);
     }
 
     for (int k = 0; k < (int)condition.size(); k++) {
@@ -52,17 +51,23 @@ int initialize_domain(scalar_field *field, json &data,
         // Adding the condition to the grid
         for (int j = start_y; j <= end_y; j++) {
             for (int i = start_x; i <= end_x; i++) {
-                CELL_TYPE val = (CELL_TYPE)GET(field, i + 1, j + 1);
-                SET(field, i + 1, j + 1, value + val);
+                CELL_TYPE val = (CELL_TYPE)GET(dom, i + 1, j + 1);
+                SET(dom, i + 1, j + 1, value + val);
             }
         }
     }
     return EXIT_SUCCESS;
 }
 
+// Initializes the speed fields
 int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
                      std::string condition_name, std::ofstream &log_file) {
     LOG_INFO(log_file, "Applying " << condition_name << " on " << field->name);
+
+    if (!data.contains(condition_name)) {
+        LOG_WARN(log_file, "Condition " << condition_name << " not given");
+        return EXIT_SUCCESS;
+    }
 
     // Checking that condition is an array
     if (data.contains(condition_name) &&
