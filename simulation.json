@@ -2,12 +2,12 @@
 	"solver": "semi-lagrangian",
 	"grid": [500, 500],
 	"space_steps": 0.1,
-	"nt": 1000,
+	"nt": 300,
 	"delta_t": 0.1,
 	"sampling_rate": 1,
 	"rho": 1000.0,
 	"tol": 1e-4,
-	"max_iter": 5e4,
+	"max_iter": 2.5e4,
 
 	"log_file": "log.txt",
 
@@ -17,14 +17,14 @@
 		{
 			"tl": [100, 100],
 			"br": [200, 200],
-			"value": 0.5
+			"value": 5.0
 		}
 	],
 
 	"ic_cell": [
 		{
-			"tl": [300, 300],
-			"br": [400, 400],
+			"tl": [300, 125],
+			"br": [350, 175],
 			"value": 1.0
 		}
 	]
