@@ -12,3 +12,4 @@ data/
 todo.md
 *.mp4
 .clang-format
+.vscode
