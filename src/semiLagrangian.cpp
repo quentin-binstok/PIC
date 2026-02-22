@@ -258,7 +258,9 @@ inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
 
     bool inverted = false;
 
-    while (maxPdiff / *std::max_element(p->values, p->values + nx * ny) > tol &&
+    while (maxPdiff >
+               tol * std::max(*std::max_element(p->values, p->values + nx * ny),
+                              1.0f) &&
            iter < max_iter) {
         maxPdiff = 0.0;
 #pragma omp parallel for collapse(2) reduction(max : maxPdiff)
@@ -569,27 +571,6 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     const float dx = data["space_steps"];
     const int sampling_rate = data["sampling_rate"];
 
-    // Initialising the fields
-    scalar_field *vx =
-        scalar_field_init("vx", nx + 1, ny, 0.5, 0, dx, log_file);
-    scalar_field *vy =
-        scalar_field_init("vy", nx, ny + 1, 0, 0.5, dx, log_file);
-    scalar_field *p = scalar_field_init("p", nx, ny, 0, 0, dx, log_file);
-    scalar_field *div = scalar_field_init("div", nx, ny, 0, 0, dx, log_file);
-    scalar_field *dom =
-        scalar_field_init("dom", nx + 2, ny + 2, 0, 0, dx, log_file);
-
-    if (!vx || !vy || !p || !div || !dom) {
-        LOG_ERR(log_file, "An error occured initializing fields.");
-        return EXIT_FAILURE;
-    }
-
-    // Applying the initial conditions
-    initialize_domain(dom, data, "ic_cell", log_file);
-    initialize_speed(vx, dom, data, "ic_vx", log_file);
-    initialize_speed(vy, dom, data, "ic_vy", log_file);
-
-    // Getting parameters
     float dt = 0.1;
     if (data.contains("delta_t"))
         dt = data["delta_t"];
@@ -609,6 +590,26 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     int max_iter = 1e5;
     if (data.contains("max_iter"))
         max_iter = data["max_iter"];
+
+    // Initialising the fields
+    scalar_field *vx =
+        scalar_field_init("vx", nx + 1, ny, 0.5, 0, dx, log_file);
+    scalar_field *vy =
+        scalar_field_init("vy", nx, ny + 1, 0, 0.5, dx, log_file);
+    scalar_field *p = scalar_field_init("p", nx, ny, 0, 0, dx, log_file);
+    scalar_field *div = scalar_field_init("div", nx, ny, 0, 0, dx, log_file);
+    scalar_field *dom =
+        scalar_field_init("dom", nx + 2, ny + 2, 0, 0, dx, log_file);
+
+    if (!vx || !vy || !p || !div || !dom) {
+        LOG_ERR(log_file, "An error occured initializing fields.");
+        return EXIT_FAILURE;
+    }
+
+    // Applying the initial conditions
+    initialize_domain(dom, data, "ic_cell", log_file);
+    initialize_speed(vx, dom, data, "ic_vx", log_file);
+    initialize_speed(vy, dom, data, "ic_vy", log_file);
 
     scalar_field *temp_vx = scalar_field_copy(vx, log_file);
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
@@ -636,10 +637,11 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
                 sum += GET(div, i, j);
 
         LOG_INFO(log_file, "Total divergence before correction: " << sum);
-        float mean = sum / (nx * ny);
-        for (unsigned int j = 0; j < ny; j++)
-            for (unsigned int i = 0; i < nx; i++)
-                SET(div, i, j, GET(div, i, j) - mean);
+        // This is completely useless
+        // float mean = sum / (nx * ny);
+        // for (unsigned int j = 0; j < ny; j++)
+        //     for (unsigned int i = 0; i < nx; i++)
+        //         SET(div, i, j, GET(div, i, j) - mean);
 
         if (data["iteration_algo"] == "Jacobi")
             jacobi(p, temp_p, div, vx, vy, dom, tol, dt, rho, max_iter,
