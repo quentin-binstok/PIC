@@ -1,15 +1,6 @@
 {
 	"solver": "semi-lagrangian",
 	"iteration_algo": "SOR",
-<<<<<<< HEAD
-	"grid": [200, 100],
-	"space_steps": 0.1,
-	"nt": 150,
-	"delta_t": 0.1,
-	"sampling_rate": 1,
-	"rho": 1000.0,
-	"tol": 1e-4,
-=======
 	"grid": [800, 700],
 	"space_steps": 0.1,
 	"nt": 1500,
@@ -17,7 +8,6 @@
 	"sampling_rate": 1,
 	"rho": 1000.0,
 	"tol": 2.5e-5,
->>>>>>> origin/quentin
 	"max_iter": 2.5e4,
 
 	"log_file": "log.txt",
@@ -26,27 +16,16 @@
 
 	"ic_vx": [
 		{
-<<<<<<< HEAD
-			"tl": [25, 25],
-			"br": [50, 50],
-			"value": 5.0
-=======
 			"tl": [100, 300],
 			"br": [200, 400],
 			"value": 10.0
->>>>>>> origin/quentin
 		}
 	],
 
 	"ic_cell": [
 		{
-<<<<<<< HEAD
-			"tl": [100, 25],
-			"br": [150, 50],
-=======
 			"tl": [205, 325],
 			"br": [255, 375],
->>>>>>> origin/quentin
 			"value": 1.0
 		}
 	]

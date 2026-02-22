@@ -15,15 +15,9 @@ enum CELL_TYPE { LIQUID, SOLID };
 */
 int initialize_domain(scalar_field *field, json &data,
                       std::string condition_name, std::ofstream &log_file);
-<<<<<<< HEAD
-// Initializes the speed fields
-int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
-                     std::string condition_name, std::ofstream &log_file);
-=======
 
 // Initializes the speed fields
 int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
                      std::string condition_name, std::ofstream &log_file);
 
->>>>>>> origin/quentin
 #endif
