@@ -2,19 +2,11 @@
 #include "data.hpp"
 #include "nlohmann/json.hpp"
 #include "utils.hpp"
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/quentin
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/quentin
 using json = nlohmann::json;
 
 /*
@@ -91,10 +83,6 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
     unsigned int nx = q_n->nx, ny = q_n->ny;
     float x_int = q_n->x_internal, y_int = q_n->y_internal;
     float dx = q_n->dx;
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/quentin
 #pragma omp parallel for collapse(2)
     for (unsigned int j = 0; j < ny; j++) {
         for (unsigned int i = 0; i < nx; i++) {
