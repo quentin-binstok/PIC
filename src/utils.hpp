@@ -10,6 +10,7 @@
 #else
 #define LOG_DEBUG(log_file, msg) void();
 #endif
+
 /*
  @brief Bilinear intepolation of q
  @param x, y: the absolute coordinates at which we want q
@@ -19,8 +20,7 @@
  @param Dx, Dy: the space steps
 */
 
-float interpolate_bilinear(int x, int y, int x1, int y1, float q11, 
-                           float q21, float q12, float q22,
-                           float Dx, float Dy);
+float interpolate_bilinear(int x, int y, int x1, int y1, float q11, float q21,
+                           float q12, float q22, float Dx, float Dy);
 
 #endif
