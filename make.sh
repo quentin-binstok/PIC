@@ -16,6 +16,7 @@ if [[ $1 == "clean" ]]; then
 fi
 
 mkdir -p $build_dir 
+mkdir -p $data_dir
 cd $build_dir 
 cmake ..
 make -j$(nproc)
