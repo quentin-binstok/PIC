@@ -636,12 +636,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
             for (unsigned int i = 0; i < nx; i++)
                 sum += GET(div, i, j);
 
-        LOG_INFO(log_file, "Total divergence before correction: " << sum);
-        // This is completely useless
-        // float mean = sum / (nx * ny);
-        // for (unsigned int j = 0; j < ny; j++)
-        //     for (unsigned int i = 0; i < nx; i++)
-        //         SET(div, i, j, GET(div, i, j) - mean);
+        LOG_INFO(log_file, "Total divergence: " << sum);
 
         if (data["iteration_algo"] == "Jacobi")
             jacobi(p, temp_p, div, vx, vy, dom, tol, dt, rho, max_iter,
