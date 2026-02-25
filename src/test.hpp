@@ -3,6 +3,6 @@
 
 #include <fstream>
 
-void test_vtp(std::ofstream& log_file);
+void test_vtp(std::ofstream &log_file);
 
 #endif

@@ -64,12 +64,12 @@ scalar_field *scalar_field_copy(const scalar_field *field,
 }
 
 void scalar_field_free(scalar_field *field, std::ofstream &log_file) {
-    if (!field) return;
+    if (!field)
+        return;
     LOG_INFO(log_file, "Freeing scalar field " << field->name);
-    LOG_INFO(log_file, "Freeing field at " << field);
-    if (field->values) free(field->values);
+    if (field->values)
+        free(field->values);
     free(field);
-
 }
 
 // Write the scalar field to a paraview file
