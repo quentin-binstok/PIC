@@ -224,6 +224,91 @@ inline int divergence(scalar_field *vx, scalar_field *vy, scalar_field *div,
 }
 
 /*
+ @brief computes the residual term of the pressure computation
+ @params scarlar_field res: where the resulting Ax term will be stored
+ @params same as everywhere
+ @returns: the 2-norm of the residual
+*/
+inline float residual(scalar_field *p, scalar_field *vx, scalar_field *vy,
+                      scalar_field *div, scalar_field *dom, float rho, float dt,
+                      std::ofstream &log_file) {
+    // LOG_INFO(log_file, "Computing the residual");
+    if (0)
+        log_file << "dummy";
+
+    int nx = p->nx;
+    int ny = p->ny;
+    float dx = dom->dx;
+    const float alpha = dx * dx * rho / dt;
+    float beta = rho * dx / dt;
+    float norm_squared = 0;
+
+#pragma omp parallel for collapse(2) reduction(+ : norm_squared)
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            if (GET(dom, i + 1, j + 1) == SOLID) {
+                continue;
+            }
+
+            float dom_left = GET(dom, i, j + 1);
+            float p_left = 0;
+            // need to extrapolate the speed
+            if (i == 0) {
+                // p_left = GET(p, i, j) -
+                //          beta * (2 * GET(vx, i, j) - GET(vx, i + 1, j));
+                p_left = GET(p, i, j);
+            } else if (dom_left == LIQUID) {
+                p_left = GET(p, i - 1, j);
+            } else if (dom_left == SOLID) {
+                p_left = GET(p, i, j) - beta * GET(vx, i - 1, j);
+            }
+
+            float dom_right = GET(dom, i + 2, j + 1);
+            float p_right = 0;
+            // no need to extrapolate due to convention
+            if (i == nx - 1) {
+                p_right = GET(p, i, j);
+            } else if (dom_right == LIQUID) {
+                p_right = GET(p, i + 1, j);
+            } else if (dom_right == SOLID) {
+                p_right = GET(p, i, j) + beta * GET(vx, i, j);
+            }
+
+            float dom_down = GET(dom, i + 1, j);
+            float p_down = 0;
+            if (j == 0) {
+                // p_down = GET(p, i, j) -
+                //          beta * (2 * GET(vy, i, j) - GET(vy, i, j + 1));
+                p_down = GET(p, i, j);
+            } else if (dom_down == LIQUID) {
+                p_down = GET(p, i, j - 1);
+            } else if (dom_down == SOLID) {
+                p_down = GET(p, i, j) - beta * GET(vy, i, j - 1);
+            }
+
+            float dom_up = GET(dom, i + 1, j + 2);
+            float p_up = 0;
+            // no need to extrapolate due to convention
+            if (j == ny - 1) {
+                p_up = GET(p, i, j);
+            } else if (dom_up == LIQUID) {
+                p_up = GET(p, i, j + 1);
+            } else if (dom_up == SOLID) {
+                p_up = GET(p, i, j) + beta * GET(vy, i, j);
+            }
+
+            float residue = GET(p, i, j) - (p_left + p_right + p_down + p_up -
+                                            alpha * GET(div, i, j)) /
+                                               4.0;
+
+            norm_squared += residue * residue;
+        }
+    }
+
+    return std::sqrt(norm_squared);
+}
+
+/*
  @brief solves the Poisson equation for the pressure using Jacobi
  iterations
  @param p: the pressure field
@@ -248,22 +333,31 @@ inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
     float dx = dom->dx;
     const float alpha = dx * dx * rho / dt;
     float beta = rho * dx / dt;
-    float maxPdiff = 1.0;
     int iter = 0;
 
-    // as it's the one that has problems converging, putting this really high
+    // as it's the one that has problems converging, putting this really
+    // high
     if (first_loop) {
         max_iter = nx * ny;
     }
 
+    float norm_b = 0;
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            norm_b += alpha * alpha * GET(div, i, j) * GET(div, i, j);
+        }
+    }
+    norm_b = std::sqrt(norm_b);
+    norm_b += 1e-7;
+
+    float residue = residual(p, vx, vy, div, dom, rho, dt, log_file);
+    float condition = residue / (norm_b);
+
     bool inverted = false;
 
-    while (maxPdiff >
-               tol * std::max(*std::max_element(p->values, p->values + nx * ny),
-                              1.0f) &&
-           iter < max_iter) {
-        maxPdiff = 0.0;
-#pragma omp parallel for collapse(2) reduction(max : maxPdiff)
+    while (condition > tol && iter < max_iter) {
+        residue = 0;
+#pragma omp parallel for collapse(2) reduction(+ : residue)
         for (int j = 0; j < ny; j++) {
             for (int i = 0; i < nx; i++) {
                 if (GET(dom, i + 1, j + 1) == SOLID)
@@ -274,7 +368,8 @@ inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
                 // need to extrapolate the speed
                 if (i == 0) {
                     // p_left = GET(p, i, j) -
-                    //          beta * (2 * GET(vx, i, j) - GET(vx, i + 1, j));
+                    //          beta * (2 * GET(vx, i, j) - GET(vx, i + 1,
+                    //          j));
                     p_left = GET(p, i, j);
                 } else if (dom_left == LIQUID) {
                     p_left = GET(p, i - 1, j);
@@ -297,7 +392,8 @@ inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
                 float p_down = 0;
                 if (j == 0) {
                     // p_down = GET(p, i, j) -
-                    //          beta * (2 * GET(vy, i, j) - GET(vy, i, j + 1));
+                    //          beta * (2 * GET(vy, i, j) - GET(vy, i, j +
+                    //          1));
                     p_down = GET(p, i, j);
                 } else if (dom_down == LIQUID) {
                     p_down = GET(p, i, j - 1);
@@ -319,14 +415,14 @@ inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
                 float new_p = (p_left + p_right + p_down + p_up -
                                alpha * GET(div, i, j)) /
                               4.0;
-                float Pdiff = std::abs(new_p - GET(p, i, j));
-                maxPdiff = std::max(maxPdiff, Pdiff);
+                residue += (GET(p, i, j) - new_p) * (GET(p, i, j) - new_p);
+
                 SET(temp_p, i, j, new_p);
             }
         }
 
-        // removing the mean of the pressure, so that we can use Neumann conds
-        // only, instead of having to fix the pressure somewhere
+        // removing the mean of the pressure, so that we can use Neumann
+        // conds only, instead of having to fix the pressure somewhere
         float sum = 0;
         for (int j = 0; j < ny; j++)
             for (int i = 0; i < nx; i++)
@@ -342,6 +438,10 @@ inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
         p = temp_p;
         temp_p = tmp;
         inverted = !inverted;
+
+        residue = std::sqrt(residue);
+        condition = residue / norm_b;
+
         iter++;
     }
 
@@ -349,10 +449,10 @@ inline int jacobi(scalar_field *p, scalar_field *temp_p, scalar_field *div,
         LOG_WARN(log_file, "Jacobi stopped at " << max_iter << " iterations")
     else
         LOG_INFO(log_file, "Jacobi converged in " << iter << " iterations");
-    LOG_INFO(log_file, "Max pressure difference: " << maxPdiff);
+    LOG_INFO(log_file, "Last residue: " << residue);
 
-    // to make sure that p has the right information for the rest of the time
-    // loop
+    // to make sure that p has the right information for the rest of the
+    // time loop
     if (inverted) {
         scalar_field *tmp = p;
         p = temp_p;
@@ -384,7 +484,6 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
     float dx = dom->dx;
     const float alpha = dx * dx * rho / dt;
     float beta = rho * dx / dt;
-    float maxPdiff = 1.0;
     int iter = 0;
 
     // parameters needed for the algorithm
@@ -392,16 +491,29 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
     const float pi = 3.14159265358979;
     const float omega = std::min(1.95f, 2.0f / (1.0f + std::sin(pi / N)));
 
-    while (maxPdiff >
-               tol * std::max(*std::max_element(p->values, p->values + nx * ny),
-                              1.0f) &&
-           iter < max_iter) {
-        maxPdiff = 0.0;
+    float norm_b = 0;
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            norm_b += alpha * alpha * GET(div, i, j) * GET(div, i, j);
+        }
+    }
+    norm_b = std::sqrt(norm_b);
+    norm_b += 1e-7;
 
+    float residue = residual(p, vx, vy, div, dom, rho, dt, log_file);
+    float condition = residue / (norm_b);
+
+    // while (maxPdiff >
+    //            tol * std::max(*std::max_element(p->values, p->values + nx *
+    //            ny),
+    //                           1.0f) &&
+    //        iter < max_iter) {
+    while ((condition > tol) && iter < max_iter) {
+        residue = 0;
         // to be able to parallelize, need checkered grids
         for (int color = 0; color < 2; color++) {
 
-#pragma omp parallel for collapse(2) reduction(max : maxPdiff)
+#pragma omp parallel for collapse(2) reduction(+ : residue)
             for (int j = 0; j < ny; j++) {
                 for (int i = 0; i < nx; i++) {
                     if ((i + j) % 2 != color)
@@ -415,8 +527,8 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                     // need to extrapolate the speed
                     if (i == 0) {
                         // p_left = GET(p, i, j) -
-                        //          beta * (2 * GET(vx, i, j) - GET(vx, i + 1,
-                        //          j));
+                        //          beta * (2 * GET(vx, i, j) - GET(vx, i +
+                        //          1, j));
                         p_left = GET(p, i, j);
                     } else if (dom_left == LIQUID) {
                         p_left = GET(p, i - 1, j);
@@ -439,8 +551,8 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                     float p_down = 0;
                     if (j == 0) {
                         // p_down = GET(p, i, j) -
-                        //          beta * (2 * GET(vy, i, j) - GET(vy, i, j +
-                        //          1));
+                        //          beta * (2 * GET(vy, i, j) - GET(vy, i, j
+                        //          + 1));
                         p_down = GET(p, i, j);
                     } else if (dom_down == LIQUID) {
                         p_down = GET(p, i, j - 1);
@@ -462,8 +574,7 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                     float new_p = (p_left + p_right + p_down + p_up -
                                    alpha * GET(div, i, j)) /
                                   4.0;
-                    float Pdiff = std::abs(new_p - GET(p, i, j));
-                    maxPdiff = std::max(maxPdiff, Pdiff);
+                    residue += (GET(p, i, j) - new_p) * (GET(p, i, j) - new_p);
                     SET(p, i, j, GET(p, i, j) + omega * (new_p - GET(p, i, j)));
                 }
             }
@@ -483,6 +594,9 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
             for (int i = 0; i < nx; i++)
                 SET(p, i, j, GET(p, i, j) - mean);
 
+        residue = std::sqrt(residue);
+        condition = residue / norm_b;
+
         iter++;
     }
 
@@ -490,7 +604,7 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
         LOG_WARN(log_file, "SOR stopped at " << max_iter << " iterations")
     else
         LOG_INFO(log_file, "SOR converged in " << iter << " iterations");
-    LOG_INFO(log_file, "Max pressure difference: " << maxPdiff);
+    LOG_INFO(log_file, "Last residue: " << residue);
 
     return EXIT_SUCCESS;
 }
@@ -650,7 +764,8 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
 
         project_velocity(p, vx, vy, dom, dx, dt, rho, log_file);
 
-        // This is to be able to save it. It serves no purpose in the algorithm
+        // This is to be able to save it. It serves no purpose in the
+        // algorithm
         divergence(vx, vy, div, log_file);
 
         // save files, when the divergence is zero
