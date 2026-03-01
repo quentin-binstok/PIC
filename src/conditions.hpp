@@ -5,7 +5,7 @@
 #include "data.hpp"
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
-enum CELL_TYPE { LIQUID, SOLID };
+enum CELL_TYPE {LIQUID, SOLID, AIR};
 /*
  @brief Applies some initial conditions to the scalar field
  @param scalar_field: the field to which apply the conditions (the domain)
