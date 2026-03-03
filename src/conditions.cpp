@@ -19,19 +19,7 @@ int initialize_domain(scalar_field *dom, json &data, std::string condition_name,
                                                   << dom->name);
     auto condition = data[condition_name];
     int nx = dom->nx, ny = dom->ny;
-    // First we set the bc, around the domain
-    CELL_TYPE value = SOLID;
-    if (data.contains("bc")) {
-        value = data["bc"];
-    }
-    for (int j = 0; j < ny; j++) {
-        SET(dom, 0, j, value);
-        SET(dom, nx - 1, j, value);
-    }
-    for (int i = 0; i < nx; i++) {
-        SET(dom, i, 0, value);
-        SET(dom, i, ny - 1, value);
-    }
+    
     for (int k = 0; k < (int)condition.size(); k++) {
         CELL_TYPE value = condition[k]["value"];
         int start_x = condition[k]["tl"][0], start_y = condition[k]["tl"][1];
@@ -102,7 +90,7 @@ int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
     return EXIT_SUCCESS;
 }
 
-/* // Initializes the speed fields
+// Initializes the speed fields
 int boundary_condition(scalar_field *field, scalar_field *dom, json &data,
                      std::string condition_name, std::ofstream &log_file) {
     LOG_INFO(log_file, "Applying " << condition_name << " on " << field->name);
@@ -118,40 +106,53 @@ int boundary_condition(scalar_field *field, scalar_field *dom, json &data,
     }
     // Easy access to the condition
     auto condition = data[condition_name];
-    int nx = field->nx;
-    int ny = field->ny;
+    int nx = dom->nx;
+    int ny = dom->ny;
     for (int k = 0; k < (int)condition.size(); k++) {
         const float type = condition[k]["type"];
-        const float speed = condition[k]["speed"];
         const int side = condition[k]["side"];
+
+        // speed is optional
+        float speed = 0.0f;
+        bool has_speed = condition[k].contains("speed");
+        if (has_speed) {
+            speed = condition[k]["speed"];
+        }
+        
         switch (side) {
         case 0: {
             // left boundary
             for (int j = 0; j < ny; j++) {
-                SET(dom, 0, j, type)
+                SET(dom, 0, j, type);
                 SET(field, 0, j, speed);
             }
         } break;
         case 1: {
             // right boundary
             for (int j = 0; j < ny; j++) {
-                SET(dom, nx - 1, j+1, type)
-                SET(field, nx - 1, j, speed);
+                SET(dom, nx - 1, j, type);
+                if (field->name == "vx") {
+                    SET(field, nx, j, speed);
+                } else {
+                    SET(field, nx - 1, j, speed);
+                }
             }
         } break;
         case 2: {
             // top boundary
             for (int i = 0; i < nx; i++) {
-                if (GET(dom, i + 1, ny - 1) == SOLID)
-                    continue;
-                SET(field, i, ny - 1, speed);
+                SET(dom, i, ny - 1, type);
+                if (field->name == "vy") {
+                    SET(field, i, ny, speed);
+                } else {
+                    SET(field, i, ny - 1, speed);
+                }
             }
         } break;
         case 3: {
             // bottom boundary
             for (int i = 0; i < nx; i++) {
-                if (GET(dom, i + 1, 1) == SOLID)
-                    continue;
+                SET(dom, i, 0, type);
                 SET(field, i, 0, speed);
             }
         } break;
@@ -162,7 +163,7 @@ int boundary_condition(scalar_field *field, scalar_field *dom, json &data,
         }
     }
     return EXIT_SUCCESS;
-} */
+}
 
 
 

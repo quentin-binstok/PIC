@@ -346,6 +346,7 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                               1.0f) &&
            iter < max_iter) {
         maxPdiff = 0.0;
+        int loop = 0;
         // to be able to parallelize, need checkered grids
         for (int color = 0; color < 2; color++) {
 #pragma omp parallel for collapse(2) reduction(max : maxPdiff)
@@ -353,7 +354,10 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                 for (int i = 0; i < nx; i++) {
                     if ((i + j) % 2 != color)
                         continue;
-                    if (GET(dom, i, j) == SOLID || GET(dom, i, j) == AIR){
+                    if(GET(dom, i, j) == DIRICHLET || GET(dom, i, j) == AIR){
+                        loop++;
+                    }
+                    if (GET(dom, i, j) != LIQUID) {
                         continue;
                     }
 
@@ -363,7 +367,7 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                         p_left = GET(p, i - 1, j);
                     } else if (dom_left == SOLID) {
                         p_left = GET(p, i, j) - beta * GET(vx, i - 1, j);
-                    } else if (dom_left == AIR) {
+                    } else if (dom_left == AIR || dom_left == DIRICHLET) {
                         p_left = 0.0f;
                     }
 
@@ -373,7 +377,7 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                         p_right = GET(p, i + 1, j);
                     } else if (dom_right == SOLID) {
                         p_right = GET(p, i, j) + beta * GET(vx, i, j);
-                    } else if (dom_right == AIR) {
+                    } else if (dom_right == AIR || dom_right == DIRICHLET) {
                         p_right = 0.0f;
                     }
 
@@ -383,7 +387,7 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                         p_down = GET(p, i, j - 1);
                     } else if (dom_down == SOLID) {
                         p_down = GET(p, i, j) - beta * GET(vy, i, j - 1);
-                    } else if (dom_down == AIR) {
+                    } else if (dom_down == AIR || dom_down == DIRICHLET) {
                         p_down = 0.0f;
                     }
 
@@ -393,7 +397,7 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                         p_up = GET(p, i, j + 1);
                     } else if (dom_up == SOLID) {
                         p_up = GET(p, i, j) + beta * GET(vy, i, j);
-                    } else if (dom_up == AIR) {
+                    } else if (dom_up == AIR || dom_up == DIRICHLET) {
                         p_up = 0.0f;
                     }
 
@@ -406,18 +410,20 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
                 }
             }
         }
-        /* // Need to remove the mean pressure, so that we have a condition in
-        // addition to the Neumann ones
-        float sum = 0;
+        if (loop == 0){
+            float sum = 0;
 #pragma omp parallel for collapse(2) reduction(+ : sum)
-        for (int j = 0; j < ny; j++)
-            for (int i = 0; i < nx; i++)
-                sum += GET(p, i, j);
-        float mean = sum / (nx * ny);
+            for (int j = 0; j < ny; j++)
+                for (int i = 0; i < nx; i++)
+                    sum += GET(p, i, j);
+            float mean = sum / (nx * ny);
 #pragma omp parallel for collapse(2)
-        for (int j = 0; j < ny; j++)
-            for (int i = 0; i < nx; i++)
-                SET(p, i, j, GET(p, i, j) - mean); */
+            for (int j = 0; j < ny; j++)
+                for (int i = 0; i < nx; i++)
+                    SET(p, i, j, GET(p, i, j) - mean);
+        }
+        // Need to remove the mean pressure, so that we have a condition in
+        // addition to the Neumann ones
         iter++;
     }
     if (iter == max_iter)
@@ -443,12 +449,15 @@ inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < vx_ny; j++) {
         for (int i = 0; i < vx_nx; i++) {
-            if (GET(dom, i+1, j) == SOLID ||
-                GET(dom, i, j) == SOLID) {
+            if (GET(dom,i+1,j) == DIRICHLET || GET(dom,i,j) == DIRICHLET) {
+                SET(vx, i, j, 10.0);
+                continue;
+            }
+            if (GET(dom, i+1, j) == SOLID || GET(dom, i, j) == SOLID) {
                 SET(vx, i, j, 0.0);
                 continue;
             }
-            if (i == vx_nx - 1 && GET(dom,i,j) == AIR) {
+            if (i == vx_nx - 1 && GET(dom, i, j) == AIR) {
                 float v_x = GET(vx, i-1, j);
                 SET(vx, i, j, v_x);
                 continue;
@@ -462,12 +471,15 @@ inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < vy_ny; j++) {
         for (int i = 0; i < vy_nx; i++) {
-            if (GET(dom, i, j + 1) == SOLID ||
-                GET(dom, i, j) == SOLID) {
+            if (GET(dom, i, j + 1) == DIRICHLET || GET(dom, i, j) == DIRICHLET) {
                 SET(vy, i, j, 0.0);
                 continue;
             }
-            if (j == vy_ny - 1 && GET(dom,i,j) == AIR) {
+            if (GET(dom, i, j + 1) == SOLID || GET(dom, i, j) == SOLID) {
+                SET(vy, i, j, 0.0);
+                continue;
+            }
+            if (j == vy_ny - 1 && GET(dom, i, j) == AIR) {
                 float v_y = GET(vy, i, j-1);
                 SET(vy, i, j, v_y);
                 continue;
@@ -526,6 +538,9 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     initialize_domain(dom, data, "ic_cell", log_file);
     initialize_speed(vx, dom, data, "ic_vx", log_file);
     initialize_speed(vy, dom, data, "ic_vy", log_file);
+    boundary_condition(vx, dom, data, "bc_vx", log_file);
+    boundary_condition(vy, dom, data, "bc_vy", log_file);
+    
     scalar_field *temp_vx = scalar_field_copy(vx, log_file);
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
     scalar_field *temp_p = scalar_field_copy(p, log_file);
