@@ -3,11 +3,11 @@
 	"iteration_algo": "SOR",
 	"grid": [500, 500],
 	"space_steps": 0.1,
-	"nt": 1000,
+	"nt": 100,
 	"delta_t": 0.1,
 	"sampling_rate": 1,
 	"rho": 1000.0,
-	"tol": 2.5e-2,
+	"tol": 1e-2,
 	"max_iter": 2e5,
 
 	"log_file": "log_squares.txt",
@@ -50,6 +50,13 @@
 			"tl": [275, 50],
 			"br": [450, 225],
 			"value": 1.0
+		}
+	],
+
+	"ic_cylinders": [
+		{
+			"center": [250, 250],
+			"radius": 28
 		}
 	]
 }

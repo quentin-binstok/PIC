@@ -722,6 +722,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
 
     // Applying the initial conditions
     initialize_domain(dom, data, "ic_cell", log_file);
+    create_circle(dom, "ic_cylinders", data, log_file);
     initialize_speed(vx, dom, data, "ic_vx", log_file);
     initialize_speed(vy, dom, data, "ic_vy", log_file);
 
