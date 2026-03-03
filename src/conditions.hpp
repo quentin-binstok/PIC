@@ -20,6 +20,9 @@ int initialize_domain(scalar_field *field, json &data,
 int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
                      std::string condition_name, std::ofstream &log_file);
 
+int create_circle(scalar_field *dom, std::string condition_name, json &data,
+                  std::ofstream &log_file);
+
 // Sets boundary conditions
 int boundary_condition(scalar_field *field, scalar_field *dom, json &data,
                      std::string condition_name, std::ofstream &log_file);
