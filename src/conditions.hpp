@@ -24,6 +24,13 @@ int initialize_domain(scalar_field *field, json &data,
 int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
                      std::string condition_name, std::ofstream &log_file);
 
+// Initializes an arbitrary field
+int initialize_field(scalar_field *field, std::string condition_name,
+                     json &data, std::ofstream &log);
+
+// Function to handle the user defined fields
+int get_fields(user_fields *fields, json &data, std::ofstream &log);
+
 /*
  @brief puts the circles in the domain
  @param: dom, the domain

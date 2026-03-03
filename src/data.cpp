@@ -72,6 +72,16 @@ void scalar_field_free(scalar_field *field, std::ofstream &log_file) {
     free(field);
 }
 
+void user_field_free(user_fields *fields, std::ofstream &log) {
+    if (!fields)
+        return;
+
+    LOG_INFO(log, "Freeing user fields");
+    for (int i = 0; i < fields->nb_fields; i++)
+        scalar_field_free(fields->fields[i], log);
+    free(fields->fields);
+}
+
 // Write the scalar field to a paraview file
 int write_scalar_vtk(scalar_field *data, int step, int rank,
                      std::ofstream &log_file) {

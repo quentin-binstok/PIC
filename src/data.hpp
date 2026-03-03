@@ -2,6 +2,7 @@
 #ifndef __SOLVER_DATA__
 #define __SOLVER_DATA__
 #include <string>
+#include <vector>
 
 #define GET(data, i, j) ((data)->values[(data)->nx * (j) + (i)])
 #define SET(data, i, j, val) ((data)->values[(data)->nx * (j) + (i)] = (val))
@@ -20,6 +21,18 @@ typedef struct _scalar_field {
     float dx;
     float *values;
 } scalar_field;
+
+/*
+A structure to store the fields defined by the user
+nb_fields: the number of created fields
+names: their names
+fields: the fields array
+*/
+typedef struct _user_fields {
+    int nb_fields;
+    std::vector<std::string> names;
+    scalar_field **fields;
+} user_fields;
 
 /*
 A structure to store particles
@@ -60,6 +73,8 @@ scalar_field *scalar_field_copy(const scalar_field *field,
  @param log_file: the log file
 */
 void scalar_field_free(scalar_field *field, std::ofstream &log_file);
+
+void user_field_free(user_fields *fields, std::ofstream &log);
 
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
                        int numranks, bool vtp, std::ofstream &log_file);

@@ -705,6 +705,9 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     if (data.contains("max_iter"))
         max_iter = data["max_iter"];
 
+    user_fields fields;
+    get_fields(&fields, data, log_file);
+
     // Initialising the fields
     scalar_field *vx =
         scalar_field_init("vx", nx + 1, ny, 0.5, 0, dx, log_file);
@@ -730,10 +733,21 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
     scalar_field *temp_p = scalar_field_copy(p, log_file);
 
+    write_manifest_vtk(vx->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(vy->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(p->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(div->name, dt, nt, sampling_rate, 1, 0, log_file);
+    for (int i = 0; i < fields.nb_fields; i++) {
+        write_manifest_vtk(fields.fields[i]->name, dt, nt, sampling_rate, 1, 0,
+                           log_file);
+    }
+
     write_scalar_vtk(vx, 0, 0, log_file);
     write_scalar_vtk(vy, 0, 0, log_file);
     write_scalar_vtk(p, 0, 0, log_file);
     write_scalar_vtk(div, 0, 0, log_file);
+    for (int i = 0; i < fields.nb_fields; i++)
+        write_scalar_vtk(fields.fields[i], 0, 0, log_file);
 
     // Main time loop
     bool inverted = false;
@@ -775,11 +789,22 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
             write_scalar_vtk(vy, i, 0, log_file);
             write_scalar_vtk(p, i, 0, log_file);
             write_scalar_vtk(div, i, 0, log_file);
+            for (int k = 0; k < fields.nb_fields; k++) {
+                write_scalar_vtk(fields.fields[k], i, 0, log_file);
+            }
         }
 
         // advect
         advect(vx, vy, dt, vx, temp_vx, log_file);
         advect(vx, vy, dt, vy, temp_vy, log_file);
+
+        for (int k = 0; k < fields.nb_fields; k++) {
+            scalar_field *tmp = scalar_field_copy(fields.fields[k], log_file);
+            advect(vx, vy, dt, fields.fields[k], tmp, log_file);
+            scalar_field *swap = fields.fields[k];
+            fields.fields[k] = tmp;
+            scalar_field_free(swap, log_file);
+        }
 
         inverted = !inverted;
         scalar_field *invert_vx = vx;
@@ -800,10 +825,6 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
                 SET(p, i, j, 0.0f);
     }
 
-    write_manifest_vtk(vx->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(vy->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(p->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(div->name, dt, nt, sampling_rate, 1, 0, log_file);
     // As we're not using objects, we need this
     scalar_field_free(vx, log_file);
     scalar_field_free(vy, log_file);
@@ -814,6 +835,8 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     scalar_field_free(temp_vx, log_file);
     scalar_field_free(temp_vy, log_file);
     scalar_field_free(temp_p, log_file);
+
+    user_field_free(&fields, log_file);
 
     auto t1 = std::chrono::high_resolution_clock::now();
     double seconds = std::chrono::duration<double>(t1 - t0).count();

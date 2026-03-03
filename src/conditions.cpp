@@ -1,4 +1,5 @@
 #include "conditions.hpp"
+#include <cstddef>
 #include <cstdlib>
 #include <fstream>
 
@@ -111,6 +112,121 @@ int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
                 SET(field, i, j, value + val);
             }
         }
+    }
+
+    return EXIT_SUCCESS;
+}
+
+// Function to initialize an arbitrary field
+int initialize_field(scalar_field *field, std::string condition_name,
+                     json &data, std::ofstream &log) {
+    LOG_INFO(log, "Initializing " << field->name);
+
+    if (!data.contains(condition_name)) {
+        LOG_WARN(log, "Condition " << condition_name << " was not provided");
+        return EXIT_FAILURE;
+    } else if ((data[condition_name].type() != json::value_t::array)) {
+        LOG_ERR(log, "Condition " << condition_name << " is not an array");
+        return EXIT_FAILURE;
+    }
+
+    auto condition = data[condition_name];
+    int nx = field->nx, ny = field->ny;
+
+    for (int k = 0; k < (int)condition.size(); k++) {
+        float value = condition[k]["value"];
+        int start_x = condition[k]["tl"][0], start_y = condition[k]["tl"][1];
+        int end_x = condition[k]["br"][0], end_y = condition[k]["br"][1];
+        // Checking that we're in the grid
+        if (start_x < 0 || start_y < 0 || end_x > nx - 1 || end_y > ny - 1) {
+            LOG_ERR(log, "Condition " << k << " in " << condition_name
+                                      << " out of bounds");
+            return EXIT_FAILURE;
+        }
+        // Adding the condition to the grid
+        for (int j = start_y; j <= end_y; j++) {
+            for (int i = start_x; i <= end_x; i++) {
+                float val = GET(field, i, j);
+                SET(field, i, j, value + val);
+            }
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
+// Function that handles the user-defined fields
+int get_fields(user_fields *fields, json &data, std::ofstream &log) {
+    LOG_INFO(log, "Getting the list of fields");
+
+    int nx = data["grid"][0], ny = data["grid"][1];
+    float dx = data["space_steps"];
+
+    if (!data.contains("fields")) {
+        LOG_WARN(log, "No arbitrary fields provided");
+        return EXIT_SUCCESS;
+    }
+
+    if (data["fields"].type() != json::value_t::array) {
+        LOG_ERR(log, "The \"fields\" parameter was not provided as an array");
+        return EXIT_FAILURE;
+    }
+
+    LOG_INFO(log, "Initializing things");
+    int nb_fields = data["fields"].size();
+    LOG_INFO(log, "Number of fields: " << nb_fields);
+    fields->nb_fields = nb_fields;
+    fields->names.resize(nb_fields);
+    fields->fields = NULL;
+    fields->fields =
+        (scalar_field **)malloc(sizeof(scalar_field *) * nb_fields);
+
+    if (!fields->fields) {
+        LOG_ERR(log, "Not possible to allocate memory for user fields");
+        std::exit(1);
+    }
+
+    LOG_INFO(log, "Initializing the fields");
+    for (int i = 0; i < nb_fields; i++) {
+        fields->names[i] = (std::string)data["fields"][i];
+        LOG_INFO(log, "Handling field " << data["fields"][i]);
+        fields->fields[i] = scalar_field_init((std::string)data["fields"][i],
+                                              nx, ny, 0, 0, dx, log);
+        if (!fields->fields[i]) {
+            LOG_ERR(log, "Not possible to allocate memory for user fields");
+            for (int j = i - 1; j >= 0; j--) {
+                scalar_field_free(fields->fields[j], log);
+            }
+            free(fields->fields);
+        }
+    }
+
+    LOG_INFO(log, "Setting the user fields");
+    for (int l = 0; l < fields->nb_fields; l++) {
+        // auto cond = data[fields->names[l]];
+        scalar_field *field = fields->fields[l];
+
+        initialize_field(field, fields->names[l], data, log);
+
+        // for (int k = 0; k < (int)cond.size(); k++) {
+        //     float value = cond[k]["value"];
+        //     int start_x = cond[k]["tl"][0], start_y = cond[k]["tl"][1];
+        //     int end_x = cond[k]["br"][0], end_y = cond[k]["br"][1];
+        //     // Checking that we're in the grid
+        //     if (start_x < 0 || start_y < 0 || end_x > nx - 1 ||
+        //         end_y > ny - 1) {
+        //         LOG_ERR(log, "cond " << k << " in " << fields->names[l]
+        //                              << " out of bounds");
+        //         return EXIT_FAILURE;
+        //     }
+        //     // Adding the cond to the grid
+        //     for (int j = start_y; j <= end_y; j++) {
+        //         for (int i = start_x; i <= end_x; i++) {
+        //             float val = GET(field, i, j);
+        //             SET(field, i, j, value + val);
+        //         }
+        //     }
+        // }
     }
 
     return EXIT_SUCCESS;
