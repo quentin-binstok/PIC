@@ -11,14 +11,6 @@
 	"tol": 1e-5,
 	"max_iter": 2e4,
 	"log_file": "log.txt",
-
-	"ic_cylinders": [
-		{
-			"center": [50, 50],
-			"radius": 10
-		}
-	],
-
 	
 	"bc_vx": [
 		{
@@ -35,8 +27,8 @@
 		},
 		{
 			"type": 3.0,
-			"speed": 20.0,
-			"side": 0
+			"side": 0,
+			"speed": 10.0
 		}
 	]
 }
