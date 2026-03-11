@@ -1,8 +1,8 @@
 {
-	"solver": "pic",
+	"solver": "semi-lagrangian",
 	"iteration_algo": "SOR",
 	"sampling_rate": 1,
-	"log_file": "log.txt",
+	"log_file": "log_squares.txt",
 
 	"grid": [500, 500],
 	"space_steps": 0.1,
@@ -13,8 +13,6 @@
 	"rho": 1000.0,
 
 	"bc": 1.0,
-
-	"particle_density": 8,
 
 	"ic_vx": [
 		{

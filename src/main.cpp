@@ -11,6 +11,7 @@
 #include "nlohmann/json.hpp"
 
 #include "data.hpp"
+#include "pic.hpp"
 #include "semiLagrangian.hpp"
 #include "utils.hpp"
 
@@ -67,6 +68,8 @@ int main(int argc, char **argv) {
     if (data["solver"] == "semi-lagrangian") {
         ret = solver_semi_lagrangian(data, log_file);
 
+    } else if (data["solver"] == "pic") {
+        ret = solver_pic(data, log_file);
     } else {
         LOG_ERR(log_file, "The specified solver is not supported.");
         LOG_ERR(log_file, "Exiting.")

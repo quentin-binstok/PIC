@@ -72,6 +72,39 @@ void scalar_field_free(scalar_field *field, std::ofstream &log_file) {
     free(field);
 }
 
+particle_field *particle_field_init_2D(const std::string name, const int N,
+                                       std::ofstream &log_file) {
+    LOG_INFO(log_file, "Initializing particle field " << name);
+    particle_field *field = new particle_field;
+
+    field->name = name;
+    field->N = N;
+    field->xyz.resize(2 * N);
+    field->velocity.resize(2 * N);
+    field->id.resize(N);
+
+    for (int i = 0; i < N; i++) {
+        field->id[i] = i;
+    }
+
+    return field;
+}
+
+particle_field *copy_particle_field(const particle_field *particles,
+                                    std::ofstream &log_file) {
+    LOG_INFO(log_file, "Copying the particle field " << particles->name);
+
+    particle_field *field = new particle_field;
+    field->name = particles->name;
+    field->N = particles->N;
+    field->xyz.assign(particles->xyz.begin(), particles->xyz.end());
+    field->velocity.assign(particles->velocity.begin(),
+                           particles->velocity.end());
+    field->id.assign(particles->id.begin(), particles->id.end());
+
+    return field;
+}
+
 void user_field_free(user_fields *fields, std::ofstream &log) {
     if (!fields)
         return;
@@ -203,18 +236,16 @@ int write_particles_vtp(const particle_field *field, const int step,
 
     /* ---- sizes ---- */
     uint64_t bytes_points = (uint64_t)(3 * field->N * sizeof(float));
-    uint64_t bytes_vel =
-        field->velocity ? (uint64_t)(ndim * field->N * sizeof(float)) : 0;
-    uint64_t bytes_id = field->id ? (uint64_t)(field->N * sizeof(int)) : 0;
+    uint64_t bytes_vel = (uint64_t)(ndim * field->N * sizeof(float));
+    uint64_t bytes_id = (uint64_t)(field->N * sizeof(int));
     uint64_t bytes_conn = (uint64_t)(field->N * sizeof(int));
     uint64_t bytes_off = (uint64_t)(field->N * sizeof(int));
 
     /* ---- offsets into appended section ---- */
     uint64_t off_points = 0;
     uint64_t off_vel = off_points + sizeof(uint64_t) + bytes_points;
-    uint64_t off_id =
-        off_vel + (field->velocity ? sizeof(uint64_t) + bytes_vel : 0);
-    uint64_t off_conn = off_id + (field->id ? sizeof(uint64_t) + bytes_id : 0);
+    uint64_t off_id = off_vel + sizeof(uint64_t) + bytes_vel;
+    uint64_t off_conn = off_id + sizeof(uint64_t) + bytes_id;
     uint64_t off_off = off_conn + sizeof(uint64_t) + bytes_conn;
 
     /* ---- XML header ---- */
@@ -231,20 +262,15 @@ int write_particles_vtp(const particle_field *field, const int step,
             "      <PointData>\n",
             field->N, field->N, (unsigned long long)off_points);
 
-    if (field->velocity) {
-        fprintf(
-            fp,
+    fprintf(fp,
             "        <DataArray type=\"Float32\" Name=\"velocity\" "
             "NumberOfComponents=\"%d\" format=\"appended\" offset=\"%llu\"/>\n",
             ndim, (unsigned long long)off_vel);
-    }
 
-    if (field->id) {
-        fprintf(fp,
-                "        <DataArray type=\"Int32\" Name=\"id\" "
-                "format=\"appended\" offset=\"%llu\"/>\n",
-                (unsigned long long)off_id);
-    }
+    fprintf(fp,
+            "        <DataArray type=\"Int32\" Name=\"id\" "
+            "format=\"appended\" offset=\"%llu\"/>\n",
+            (unsigned long long)off_id);
 
     fprintf(fp,
             "      </PointData>\n"
@@ -264,7 +290,7 @@ int write_particles_vtp(const particle_field *field, const int step,
     /* points */
     fwrite(&bytes_points, sizeof(uint64_t), 1, fp);
     if (ndim == 3)
-        fwrite(field->xyz, sizeof(float), ndim * field->N, fp);
+        fwrite(field->xyz.data(), sizeof(float), ndim * field->N, fp);
     else if (ndim == 2) {
         float zero = 0;
         for (int i = 0; i < field->N; i++) {
@@ -278,16 +304,12 @@ int write_particles_vtp(const particle_field *field, const int step,
     }
 
     /* velocity */
-    if (field->velocity) {
-        fwrite(&bytes_vel, sizeof(uint64_t), 1, fp);
-        fwrite(field->velocity, sizeof(float), ndim * field->N, fp);
-    }
+    fwrite(&bytes_vel, sizeof(uint64_t), 1, fp);
+    fwrite(field->velocity.data(), sizeof(float), ndim * field->N, fp);
 
     /* id */
-    if (field->id) {
-        fwrite(&bytes_id, sizeof(uint64_t), 1, fp);
-        fwrite(field->id, sizeof(int), field->N, fp);
-    }
+    fwrite(&bytes_id, sizeof(uint64_t), 1, fp);
+    fwrite(field->id.data(), sizeof(int), field->N, fp);
 
     /* connectivity: 0,1,2,...,N-1 */
     fwrite(&bytes_conn, sizeof(uint64_t), 1, fp);

@@ -45,9 +45,9 @@ id: the ids of the particles, to identify them in paraview
 typedef struct _particle_field {
     std::string name;
     int N;
-    float *xyz;      // soit 2D soit 3D, each particle's position aligned
-    float *velocity; // idem
-    int *id;
+    std::vector<float> xyz; // soit 2D soit 3D, each particle's position aligned
+    std::vector<float> velocity; // idem
+    std::vector<int> id;
 } particle_field;
 
 /*
@@ -73,6 +73,22 @@ scalar_field *scalar_field_copy(const scalar_field *field,
  @param log_file: the log file
 */
 void scalar_field_free(scalar_field *field, std::ofstream &log_file);
+
+/*
+ @brief Initializing a particle field in 2D
+ @param name: the name of the particle field
+ @param N: the number of particles
+ @param log_file: the log file
+ @return: the particle field with resized std::vectors
+*/
+particle_field *particle_field_init_2D(const std::string name, const int N,
+                                       std::ofstream &log_file);
+
+/*
+ @brief deep copy of the particle field
+*/
+particle_field *copy_particle_field(const particle_field *particles,
+                                    std::ofstream &log_file);
 
 void user_field_free(user_fields *fields, std::ofstream &log);
 
