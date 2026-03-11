@@ -125,19 +125,8 @@ int create_circle(scalar_field *dom, std::string condition_name, json &data,
 
 
 // Initializes the speed fields
-int boundary_condition(scalar_field *field, scalar_field *dom, json &data,
+int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom, json &data,
                      std::string condition_name, std::ofstream &log_file) {
-    LOG_INFO(log_file, "Applying " << condition_name << " on " << field->name);
-    if (!data.contains(condition_name)) {
-        LOG_WARN(log_file, "Condition " << condition_name << " not given");
-        return EXIT_SUCCESS;
-    }
-    // Checking that condition is an array
-    if (data.contains(condition_name) &&
-        data[condition_name].type() != json::value_t::array) {
-        LOG_ERR(log_file, "Condition " << condition_name << " is not an array");
-        return EXIT_FAILURE;
-    }
     // Easy access to the condition
     auto condition = data[condition_name];
     int nx = dom->nx;
@@ -147,39 +136,102 @@ int boundary_condition(scalar_field *field, scalar_field *dom, json &data,
         const int side = condition[k]["side"];
 
         // speed is optional
-        float speed = 0.0f;
-        bool has_speed = condition[k].contains("speed");
-        if (has_speed) {
-            speed = condition[k]["speed"];
+        float speed_x = 0.0f;
+        bool has_speed_x = condition[k].contains("speed_x");
+        if (has_speed_x) {
+            speed_x = condition[k]["speed_x"];
         }
+        float speed_y = 0.0f;
+        bool has_speed_y = condition[k].contains("speed_y");
+        if (has_speed_y) {
+            speed_y = condition[k]["speed_y"];
+        }
+
+        int smooth = 8;
         
         switch (side) {
         case 0: {
             // left boundary
             for (int j = 0; j < ny; j++) {
                 SET(dom, 0, j, type);
-                SET(field, 0, j, speed);
+
+            float u = speed_x;
+            float v = speed_y;
+
+            // bottom ramp
+            if (j < smooth){
+                u = speed_x * (float)j / smooth;
+                v = speed_y * (float)j / smooth;
+            }
+
+            // top ramp
+            if (j > ny - smooth - 1){ 
+                u = speed_x * (float)(ny - j - 1) / smooth;
+                v = speed_y * (float)(ny - j - 1) / smooth;
+            }
+
+            SET(vx, 0, j, u);
+            SET(vy, 0, j, v);
             }
         } break;
         case 1: {
             // right boundary
             for (int j = 0; j < ny; j++) {
                 SET(dom, nx - 1, j, type);
-                SET(field, nx - 1, j, speed);
+                float u = speed_x;
+                float v = speed_y;
+                // bottom ramp
+                if (j < smooth){
+                    u = speed_x * (float)j / smooth;
+                    v = speed_y * (float)j / smooth;
+                }
+                // top ramp
+                if (j > ny - smooth - 1){
+                    u = speed_x * (float)(ny - j - 1) / smooth;
+                    v = speed_y * (float)(ny - j - 1) / smooth;
+                }
+                SET(vx, nx - 1, j, u);  
+                SET(vy, nx - 1, j, v);
             }
         } break;
         case 2: {
             // top boundary
             for (int i = 0; i < nx; i++) {
                 SET(dom, i, ny - 1, type);
-                SET(field, i, ny - 1, speed);
+                float u = speed_x;
+                float v = speed_y;
+                // left ramp
+                if (i < smooth){
+                    u = speed_x * (float)i / smooth;
+                    v = speed_y * (float)i / smooth;
+                }
+                // right ramp
+                if (i > nx - smooth - 1){
+                    u = speed_x * (float)(nx - i - 1) / smooth;
+                    v = speed_y * (float)(nx - i - 1) / smooth;
+                }
+                SET(vx, i, ny - 1, u);
+                SET(vy, i, ny - 1, v);
             }
         } break;
         case 3: {
             // bottom boundary
             for (int i = 0; i < nx; i++) {
                 SET(dom, i, 0, type);
-                SET(field, i, 0, speed);
+                float u = speed_x;
+                float v = speed_y;
+                // left ramp
+                if (i < smooth){
+                    u = speed_x * (float)i / smooth;
+                    v = speed_y * (float)i / smooth;
+                }
+                // right ramp
+                if (i > nx - smooth - 1){
+                    u = speed_x * (float)(nx - i - 1) / smooth;
+                    v = speed_y * (float)(nx - i - 1) / smooth;
+                }
+                SET(vx, i, 0, u);
+                SET(vy, i, 0, v);
             }
         } break;
         default:

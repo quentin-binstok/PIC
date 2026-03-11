@@ -2,33 +2,39 @@
 {
 	"solver": "semi-lagrangian",
 	"iteration_algo": "SOR",
-	"grid": [100, 100],
+	"grid": [400, 200],
 	"space_steps": 0.01,
-	"nt": 100,
+	"nt": 150,
 	"delta_t": 0.01,
 	"sampling_rate": 1,
 	"rho": 1000.0,
-	"tol": 1e-5,
+	"tol": 1e-2,
 	"max_iter": 2e4,
 	"log_file": "log.txt",
-	
-	"bc_vx": [
+
+	"ic_cylinders": [
+		{
+		"center": [200, 100],
+		"radius": 20
+		}
+	],
+	"bc": [
 		{
 			"type": 2.0,
-			"side": 1
-		},
-		{
-			"type": 2.0,
-			"side": 2
-		},
-		{
-			"type": 2.0,
-			"side": 3
+			"side": 0
 		},
 		{
 			"type": 3.0,
-			"side": 0,
-			"speed": 10.0
+			"side": 1,
+			"speed_x": -30.0
+		},
+		{
+			"type": 1.0,
+			"side": 2
+		},
+		{
+			"type": 1.0,
+			"side": 3
 		}
 	]
 }
