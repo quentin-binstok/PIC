@@ -160,7 +160,8 @@ int write_scalar_vtk(scalar_field *data, int step, int rank,
             "    </Piece>\n"
             "  </ImageData>\n"
             "  <AppendedData encoding=\"raw\">\n_",
-            data->nx - 1, data->ny - 1, 0, data->dx, data->dx, 0., 0., 0., 0.,
+            data->nx - 1, data->ny - 1, 0, data->dx, data->dx, 0.,
+            data->x_internal * data->dx, data->y_internal * data->dx, 0.,
             data->nx - 1, data->ny - 1, 0, data->name.c_str());
 
     fwrite(&num_bytes, sizeof(uint64_t), 1, fp);
