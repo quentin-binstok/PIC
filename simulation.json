@@ -1,40 +1,83 @@
 
 {
-	"solver": "semi-lagrangian",
+	"solver": "pic",
 	"iteration_algo": "SOR",
-	"grid": [400, 200],
-	"space_steps": 0.01,
-	"nt": 150,
-	"delta_t": 0.01,
 	"sampling_rate": 1,
-	"rho": 1000.0,
-	"tol": 1e-2,
-	"max_iter": 2e4,
 	"log_file": "log.txt",
-
-	"ic_cylinders": [
+	"grid": [500, 500],
+	"space_steps": 0.1,
+	"nt": 1000,
+	"delta_t": 0.1,
+	"tol": 1e-2,
+	"max_iter": 2e5,
+	"rho": 1000.0,
+	"bc": 1.0,
+	"particle_density": 8,
+	"ic_vx": [
 		{
-		"center": [200, 100],
-		"radius": 20
+			"tl": [20, 235],
+			"br": [150, 265],
+			"value": 5.0
 		}
 	],
-	"bc": [
+	"ic_vy": [
 		{
-			"type": 2.0,
-			"side": 0
+			"tl": [190, 260],
+			"br": [230, 290],
+			"value": 0.0
+		}
+	],
+	"ic_cell": [
+		{
+			"tl": [50, 50],
+			"br": [225, 225],
+			"value": 1.0
 		},
 		{
-			"type": 3.0,
-			"side": 1,
-			"speed_x": -30.0
+			"tl": [275, 275],
+			"br": [450, 450],
+			"value": 1.0
 		},
 		{
-			"type": 1.0,
-			"side": 2
+			"tl": [50, 275],
+			"br": [225, 450],
+			"value": 1.0
 		},
 		{
-			"type": 1.0,
-			"side": 3
+			"tl": [275, 50],
+			"br": [450, 225],
+			"value": 1.0
+		}
+	],
+	"ic_cylinders": [
+		{
+			"center": [250, 250],
+			"radius": 10
+		}
+	],
+	"fields": ["temperature", "concentration"],
+	"temperature": [
+		{
+			"tl": [200, 235],
+			"br": [230, 265],
+			"value": 5.0
+		},
+		{
+			"tl": [50, 235],
+			"br": [90, 265],
+			"value": 5.0
+		},
+		{
+			"tl": [235, 400],
+			"br": [265, 450],
+			"value": 5.0
+		}
+	],
+	"concentration": [
+		{
+			"tl": [30, 235],
+			"br": [80, 265],
+			"value": 10.0
 		}
 	]
 }
