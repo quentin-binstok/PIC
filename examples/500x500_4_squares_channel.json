@@ -1,0 +1,55 @@
+{
+	"solver": "semi-lagrangian",
+	"iteration_algo": "SOR",
+	"grid": [500, 500],
+	"space_steps": 0.1,
+	"nt": 500,
+	"delta_t": 0.1,
+	"sampling_rate": 1,
+	"rho": 1000.0,
+	"tol": 1e-4,
+	"max_iter": 2e4,
+
+	"log_file": "log_squares.txt",
+
+	"bc": 1.0,
+
+	"ic_vx": [
+		{
+			"tl": [40, 235],
+			"br": [80, 265],
+			"value": 5.0
+		}
+	],
+
+	"ic_vy": [
+		{
+			"tl": [190, 260],
+			"br": [230, 290],
+			"value": 0.0
+		}
+	],
+
+	"ic_cell": [
+		{
+			"tl": [50, 50],
+			"br": [225, 225],
+			"value": 1.0
+		},
+		{
+			"tl": [275, 275],
+			"br": [450, 450],
+			"value": 1.0
+		},
+		{
+			"tl": [50, 275],
+			"br": [225, 450],
+			"value": 1.0
+		},
+		{
+			"tl": [275, 50],
+			"br": [450, 225],
+			"value": 1.0
+		}
+	]
+}

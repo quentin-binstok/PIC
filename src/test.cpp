@@ -13,10 +13,6 @@ void test_vtp(std::ofstream &log_file) {
 
     LOG_INFO(log_file, "Allocating field");
 
-    field.xyz = (float *)calloc(field.N, 2 * sizeof(float));
-    field.velocity = (float *)calloc(field.N, 2 * sizeof(float));
-    field.id = (int *)calloc(field.N, sizeof(int));
-
     LOG_INFO(log_file, "Setting 0 values");
     for (int i = 0; i < field.N; i++) {
         field.xyz[2 * i] = i;
@@ -48,10 +44,6 @@ void test_vtp(std::ofstream &log_file) {
     write_manifest_vtk(field.name, (double)1, steps, 1, 1, true, log_file);
 
     LOG_INFO(log_file, "End of test, freeing");
-
-    free(field.xyz);
-    free(field.velocity);
-    free(field.id);
 
     return;
 }

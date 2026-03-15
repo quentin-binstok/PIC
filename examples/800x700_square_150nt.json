@@ -1,6 +1,6 @@
 {
 	"solver": "semi-lagrangian",
-	"iteration_algo": "Jacobi",
+	"iteration_algo": "SOR",
 	"grid": [800, 700],
 	"space_steps": 0.1,
 	"nt": 150,
@@ -8,7 +8,7 @@
 	"sampling_rate": 1,
 	"rho": 1000.0,
 	"tol": 2.5e-5,
-	"max_iter": 1e5,
+	"max_iter": 2.5e4,
 
 	"log_file": "log.txt",
 

@@ -172,7 +172,8 @@ inline float kernel(float r) {
 }
 
 inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
-                                   scalar_field *vy, scalar_field *kern_sum,
+                                   scalar_field *vy, scalar_field *kern_sum_vx,
+                                   scalar_field *kern_sum_vy,
                                    std::ofstream &log_file) {
     LOG_INFO(log_file, "Transferring the speed of particles to the grid");
 
@@ -186,7 +187,8 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
         for (int i = 0; i < nx; i++) {
             SET(vx, i, j, 0);
             SET(vy, i, j, 0);
-            SET(kern_sum, i, j, 0);
+            SET(kern_sum_vx, i, j, 0);
+            SET(kern_sum_vy, i, j, 0);
         }
     }
 
@@ -196,24 +198,28 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
         float y = particles->xyz[2 * k + 1];
         float u = particles->velocity[2 * k];
         float v = particles->velocity[2 * k + 1];
+        int i_p = std::max(0, (int)(x / dx));
+        int i_end = std::min(nx, i_p + 2);
+        int j_p = std::max(0, (int)(y / dx));
+        int j_end = std::min(ny, j_p + 2);
 
-        for (int j = std::max(0, (int)(y / dx - 1)); j < y / dx + 1 && j < ny;
-             j++) {
-            for (int i = std::max(0, (int)(x / dx - 1));
-                 i < x / dx + 1 && i < nx; i++) {
+        for (int j = j_p; j < j_end; j++) {
+            for (int i = i_p; i < i_end; i++) {
                 float dist_x = x - i * dx;
                 float dist_y = y - j * dx;
-                float kern = kernel(dist_x / dx) * kernel(dist_y / dx);
+                float kern_x =
+                    kernel((dist_x - 0.5 * dx) / dx) * kernel(dist_y / dx);
+                float kern_y =
+                    kernel(dist_x / dx) * kernel((dist_y - 0.5 * dx) / dx);
 
-#pragma omp critical
-                {
-                    float vx_pre = GET(vx, i, j);
-                    float vy_pre = GET(vy, i, j);
-                    float kern_pre = GET(kern_sum, i, j);
-                    SET(vx, i, j, vx_pre + u * kern);
-                    SET(vy, i, j, vy_pre + v * kern);
-                    SET(kern_sum, i, j, kern_pre + kern);
-                }
+#pragma omp atomic
+                vx->values[j * vx->nx + i] += u * kern_x;
+#pragma omp atomic
+                vy->values[j * vy->nx + i] += v * kern_y;
+#pragma omp atomic
+                kern_sum_vx->values[j * kern_sum_vx->nx + i] += kern_x;
+#pragma omp atomic
+                kern_sum_vy->values[j * kern_sum_vy->nx + i] += kern_y;
             }
         }
     }
@@ -221,11 +227,13 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
-            float kern = GET(kern_sum, i, j);
-            if (kern != 0) {
-                SET(vx, i, j, GET(vx, i, j) / kern);
-                SET(vy, i, j, GET(vy, i, j) / kern);
+            float kern_x = GET(kern_sum_vx, i, j);
+            float kern_y = GET(kern_sum_vy, i, j);
+            if (kern_x != 0) {
+                SET(vx, i, j, GET(vx, i, j) / kern_x);
             }
+            if (kern_y != 0)
+                SET(vy, i, j, GET(vy, i, j) / kern_y);
         }
     }
 
@@ -335,6 +343,7 @@ inline int divergence_pic(scalar_field *vx, scalar_field *vy, scalar_field *div,
     }
 
     int j = 0;
+#pragma omp parallel for
     for (int i = 1; i < nx; i++) {
         float dudx = (GET(vx, i, j) - GET(vx, i - 1, j)) / dx;
         float dvdy = (GET(vy, i, j)) / dx;
@@ -343,6 +352,7 @@ inline int divergence_pic(scalar_field *vx, scalar_field *vy, scalar_field *div,
     }
 
     int i = 0;
+#pragma omp parallel for
     for (int j = 1; j < ny; j++) {
         float dudx = (GET(vx, i, j)) / dx;
         float dvdy = (GET(vy, i, j) - GET(vy, i, j - 1)) / dx;
@@ -644,6 +654,9 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
     //                           1.0f) &&
     //        iter < max_iter) {
     while ((condition > tol) && iter < max_iter) {
+        if (iter % 100 == 0)
+            LOG_INFO(log_file, "SOR on iteration " << iter << ", criterion is "
+                                                   << condition);
         residue = 0;
         // to be able to parallelize, need checkered grids
         for (int color = 0; color < 2; color++) {
@@ -806,8 +819,8 @@ inline void initialize_particles_pic(particle_field *particles,
                                      std::ofstream &log_file) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<double> dist(0, dom->dx);
-    int nx = dom->nx, ny = dom->ny;
+    std::uniform_real_distribution<double> dist(-0.5 * dom->dx, 0.5 * dom->dx);
+    int nx = dom->nx - 1, ny = dom->ny - 1;
     float dx = dom->dx;
 
     int nb_not_fluid_cases = 0;
@@ -815,7 +828,7 @@ inline void initialize_particles_pic(particle_field *particles,
 
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
-            float cell = GET(dom, i, j);
+            float cell = GET(dom, i + 1, j + 1);
             if (cell == LIQUID) {
                 for (int k = 0; k < density; k++) {
                     float x = i * dx + dist(gen);
@@ -899,8 +912,10 @@ int solver_pic(json &data, std::ofstream &log_file) {
     scalar_field *dom =
         scalar_field_init("dom", nx + 2, ny + 2, 0, 0, dx, log_file);
 
-    scalar_field *kern_sum =
-        scalar_field_init("kern_sum", nx, ny, 0, 9, dx, log_file);
+    scalar_field *kern_sum_vx =
+        scalar_field_init("kern_sum_vx", nx, ny, 0, 0, dx, log_file);
+    scalar_field *kern_sum_vy =
+        scalar_field_init("kern_sum_vy", nx, ny, 0, 0, dx, log_file);
 
     if (!vx || !vy || !p || !div || !dom) {
         LOG_ERR(log_file, "An error occured initializing fields.");
@@ -993,7 +1008,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
 
         advect_pic(particles, vx, vy, dt, log_file);
 
-        particles_speed_to_grid(particles, vx, vy, kern_sum, log_file);
+        particles_speed_to_grid(particles, vx, vy, kern_sum_vx, kern_sum_vy,
+                                log_file);
 
         // advect
         // advect_pic_old(vx, vy, dt, vx, temp_vx, log_file);
@@ -1034,6 +1050,9 @@ int solver_pic(json &data, std::ofstream &log_file) {
     scalar_field_free(p, log_file);
     scalar_field_free(div, log_file);
     scalar_field_free(dom, log_file);
+
+    scalar_field_free(kern_sum_vx, log_file);
+    scalar_field_free(kern_sum_vy, log_file);
 
     // scalar_field_free(temp_vx, log_file);
     // scalar_field_free(temp_vy, log_file);

@@ -272,6 +272,91 @@ inline float residual(scalar_field *p, scalar_field *vx, scalar_field *vy,
 }
 
 /*
+ @brief computes the residual term of the pressure computation
+ @params scarlar_field res: where the resulting Ax term will be stored
+ @params same as everywhere
+ @returns: the 2-norm of the residual
+*/
+inline float residual(scalar_field *p, scalar_field *vx, scalar_field *vy,
+                      scalar_field *div, scalar_field *dom, float rho, float dt,
+                      std::ofstream &log_file) {
+    // LOG_INFO(log_file, "Computing the residual");
+    if (0)
+        log_file << "dummy";
+
+    int nx = p->nx;
+    int ny = p->ny;
+    float dx = dom->dx;
+    const float alpha = dx * dx * rho / dt;
+    float beta = rho * dx / dt;
+    float norm_squared = 0;
+
+#pragma omp parallel for collapse(2) reduction(+ : norm_squared)
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            if (GET(dom, i + 1, j + 1) == SOLID) {
+                continue;
+            }
+
+            float dom_left = GET(dom, i, j + 1);
+            float p_left = 0;
+            // need to extrapolate the speed
+            if (i == 0) {
+                // p_left = GET(p, i, j) -
+                //          beta * (2 * GET(vx, i, j) - GET(vx, i + 1, j));
+                p_left = GET(p, i, j);
+            } else if (dom_left == LIQUID) {
+                p_left = GET(p, i - 1, j);
+            } else if (dom_left == SOLID) {
+                p_left = GET(p, i, j) - beta * GET(vx, i - 1, j);
+            }
+
+            float dom_right = GET(dom, i + 2, j + 1);
+            float p_right = 0;
+            // no need to extrapolate due to convention
+            if (i == nx - 1) {
+                p_right = GET(p, i, j);
+            } else if (dom_right == LIQUID) {
+                p_right = GET(p, i + 1, j);
+            } else if (dom_right == SOLID) {
+                p_right = GET(p, i, j) + beta * GET(vx, i, j);
+            }
+
+            float dom_down = GET(dom, i + 1, j);
+            float p_down = 0;
+            if (j == 0) {
+                // p_down = GET(p, i, j) -
+                //          beta * (2 * GET(vy, i, j) - GET(vy, i, j + 1));
+                p_down = GET(p, i, j);
+            } else if (dom_down == LIQUID) {
+                p_down = GET(p, i, j - 1);
+            } else if (dom_down == SOLID) {
+                p_down = GET(p, i, j) - beta * GET(vy, i, j - 1);
+            }
+
+            float dom_up = GET(dom, i + 1, j + 2);
+            float p_up = 0;
+            // no need to extrapolate due to convention
+            if (j == ny - 1) {
+                p_up = GET(p, i, j);
+            } else if (dom_up == LIQUID) {
+                p_up = GET(p, i, j + 1);
+            } else if (dom_up == SOLID) {
+                p_up = GET(p, i, j) + beta * GET(vy, i, j);
+            }
+
+            float residue = GET(p, i, j) - (p_left + p_right + p_down + p_up -
+                                            alpha * GET(div, i, j)) /
+                                               4.0;
+
+            norm_squared += residue * residue;
+        }
+    }
+
+    return std::sqrt(norm_squared);
+}
+
+/*
  @brief solves the Poisson equation for the pressure using Jacobi
  iterations
  @param p: the pressure field
@@ -571,6 +656,9 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
         residue = std::sqrt(residue);
         condition = residue / norm_b;
 
+        residue = std::sqrt(residue);
+        condition = residue / norm_b;
+
         iter++;
     }
 
@@ -670,6 +758,10 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     int max_iter = 1e5;
     if (data.contains("max_iter"))
         max_iter = data["max_iter"];
+
+    user_fields fields;
+    get_fields(&fields, data, log_file);
+
     // Initialising the fields
     scalar_field *vx =
         scalar_field_init("vx", nx, ny, 0.5, 0, dx, log_file);
@@ -684,7 +776,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
         return EXIT_FAILURE;
     }
     // Applying the initial conditions
-    /* initialize_domain(dom, data, "ic_cell", log_file); */
+    initialize_domain(dom, data, "ic_cell", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
     initialize_speed(vx, dom, data, "ic_vx", log_file);
     initialize_speed(vy, dom, data, "ic_vy", log_file);
@@ -693,11 +785,23 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     scalar_field *temp_vx = scalar_field_copy(vx, log_file);
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
     scalar_field *temp_p = scalar_field_copy(p, log_file);
+
+    write_manifest_vtk(vx->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(vy->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(p->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(div->name, dt, nt, sampling_rate, 1, 0, log_file);
+    for (int i = 0; i < fields.nb_fields; i++) {
+        write_manifest_vtk(fields.fields[i]->name, dt, nt, sampling_rate, 1, 0,
+                           log_file);
+    }
+
     write_scalar_vtk(vx, 0, 0, log_file);
     write_scalar_vtk(vy, 0, 0, log_file);
     write_scalar_vtk(p, 0, 0, log_file);
     write_scalar_vtk(div, 0, 0, log_file);
-    write_scalar_vtk(dom, 0, 0, log_file);
+    for (int i = 0; i < fields.nb_fields; i++)
+        write_scalar_vtk(fields.fields[i], 0, 0, log_file);
+
     // Main time loop
     bool inverted = false;
     for (unsigned int i = 1; i < nt; i++) {
@@ -710,15 +814,22 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
         for (unsigned int j = 0; j < ny; j++)
             for (unsigned int i = 0; i < nx; i++)
                 sum += GET(div, i, j);
+
         LOG_INFO(log_file, "Total divergence: " << sum);
-        if (data["iteration_algo"] == "SOR")
+
+        if (data["iteration_algo"] == "Jacobi")
+            jacobi(p, temp_p, div, vx, vy, dom, tol, dt, rho, max_iter,
+                   first_loop, log_file);
+        else if (data["iteration_algo"] == "SOR")
             sor(p, div, vx, vy, dom, tol, dt, rho, max_iter, log_file);
         else {
             LOG_ERR(log_file, "Iteration algorithm not supported");
             return EXIT_FAILURE;
         }
         project_velocity(p, vx, vy, dom, dx, dt, rho, log_file);
-        // This is to be able to save it. It serves no purpose in the algorithm
+
+        // This is to be able to save it. It serves no purpose in the
+        // algorithm
         divergence(vx, vy, div, log_file);
         // save files, when the divergence is zero
         if (sampling_rate && !(i % sampling_rate)) {
@@ -726,11 +837,22 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
             write_scalar_vtk(vy, i, 0, log_file);
             write_scalar_vtk(p, i, 0, log_file);
             write_scalar_vtk(div, i, 0, log_file);
-            write_scalar_vtk(dom, i, 0, log_file);
+            for (int k = 0; k < fields.nb_fields; k++) {
+                write_scalar_vtk(fields.fields[k], i, 0, log_file);
+            }
         }
         // advect
         advect(vx, vy, dt, vx, temp_vx, log_file);
         advect(vx, vy, dt, vy, temp_vy, log_file);
+
+        for (int k = 0; k < fields.nb_fields; k++) {
+            scalar_field *tmp = scalar_field_copy(fields.fields[k], log_file);
+            advect(vx, vy, dt, fields.fields[k], tmp, log_file);
+            scalar_field *swap = fields.fields[k];
+            fields.fields[k] = tmp;
+            scalar_field_free(swap, log_file);
+        }
+
         inverted = !inverted;
         scalar_field *invert_vx = vx;
         scalar_field *invert_vy = vy;
@@ -744,11 +866,6 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
             for (unsigned int i = 0; i < nx; i++)
                 SET(p, i, j, 0.0f);
     }
-    write_manifest_vtk(vx->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(vy->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(p->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(div->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(dom->name, dt, nt, sampling_rate, 1, 0, log_file);
     // As we're not using objects, we need this
     scalar_field_free(vx, log_file);
     scalar_field_free(vy, log_file);
@@ -758,6 +875,9 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     scalar_field_free(temp_vx, log_file);
     scalar_field_free(temp_vy, log_file);
     scalar_field_free(temp_p, log_file);
+
+    user_field_free(&fields, log_file);
+
     auto t1 = std::chrono::high_resolution_clock::now();
     double seconds = std::chrono::duration<double>(t1 - t0).count();
     LOG_INFO(log_file, "Total simulation time: " << seconds << " seconds");

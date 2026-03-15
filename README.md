@@ -12,3 +12,7 @@ The methods that will be implemented are:
 - and the APIC method.
 
 A more advanced topic will be explored, which is yet to be determined.
+
+## Building
+
+To build, just run `./make.sh`. If you need to clean up the directory, run `./make.sh clean`. If you want to make a clean build, `./make.sh clean_build` is available.
