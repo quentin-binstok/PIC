@@ -91,43 +91,21 @@ int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
     return EXIT_SUCCESS;
 }
 
-int create_circle(scalar_field *dom, std::string condition_name, json &data,
-                  std::ofstream &log_file) {
-    LOG_INFO(log_file, "Adding cylinders");
-
-    if (!data.contains(condition_name)) {
-        LOG_WARN(log_file,
-                 "Condition " << condition_name << " was not provided");
-        return EXIT_SUCCESS;
-    } else if ((data[condition_name].type() != json::value_t::array)) {
-        LOG_ERR(log_file, "Condition " << condition_name << " is not an array");
-        return EXIT_FAILURE;
-    }
-
-    auto condition = data[condition_name];
-    int nx = dom->nx, ny = dom->ny;
-
-    for (int k = 0; k < (int)condition.size(); k++) {
-        int x = condition[k]["center"][0], y = condition[k]["center"][1];
-        int radius = condition[k]["radius"];
-
-        for (int j = y - radius - 10; j <= y + radius + 10; j++) {
-            for (int i = x - radius - 10; i <= x + radius + 10; i++) {
-                float condition =
-                    (i - x) * (i - x) + (j - y) * (j - y) - radius * radius;
-                if (condition <= 0 && i >= 0 && i < nx && j >= 0 && j < ny)
-                    SET(dom, i, j, 1);
-            }
-        }
-    }
-
-    return EXIT_SUCCESS;
-}
-
 
 // Initializes the speed fields
 int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom, json &data,
                      std::string condition_name, std::ofstream &log_file) {
+    LOG_INFO(log_file, "Applying " << condition_name << " on the boundaries");
+    if (!data.contains(condition_name)) {
+        LOG_WARN(log_file, "Condition " << condition_name << " not given");
+        return EXIT_SUCCESS;
+    }
+    // Checking that condition is an array
+    if (data.contains(condition_name) &&
+        data[condition_name].type() != json::value_t::array) {
+        LOG_ERR(log_file, "Condition " << condition_name << " is not an array");
+        return EXIT_FAILURE;
+    }
     // Easy access to the condition
     auto condition = data[condition_name];
     int nx = dom->nx;
@@ -156,23 +134,23 @@ int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom, js
             for (int j = 0; j < ny; j++) {
                 SET(dom, 0, j, type);
 
-            float u = speed_x;
-            float v = speed_y;
+                float u = speed_x;
+                float v = speed_y;
 
-            // bottom ramp
-            if (j < smooth){
-                u = speed_x * (float)j / smooth;
-                v = speed_y * (float)j / smooth;
-            }
+                // bottom ramp
+                if (j < smooth){
+                    u = speed_x * (float)j / smooth;
+                    v = speed_y * (float)j / smooth;
+                }
 
-            // top ramp
-            if (j > ny - smooth - 1){ 
-                u = speed_x * (float)(ny - j - 1) / smooth;
-                v = speed_y * (float)(ny - j - 1) / smooth;
-            }
+                // top ramp
+                if (j > ny - smooth - 1){ 
+                    u = speed_x * (float)(ny - j - 1) / smooth;
+                    v = speed_y * (float)(ny - j - 1) / smooth;
+                }
 
-            SET(vx, 0, j, u);
-            SET(vy, 0, j, v);
+                SET(vx, 0, j, u);
+                SET(vy, 0, j, v);
             }
         } break;
         case 1: {
