@@ -326,6 +326,7 @@ inline int advect_pic_old(scalar_field *vx, scalar_field *vy, float dt,
  @return the maximum divergence in the field, for logging purposes
 */
 inline int divergence_pic(scalar_field *vx, scalar_field *vy, scalar_field *div,
+                          scalar_field *dom, std::vector<float> speed_condition,
                           std::ofstream &log_file) {
     LOG_INFO(log_file, "Computing the divergence");
     int nx = div->nx;
@@ -339,12 +340,16 @@ inline int divergence_pic(scalar_field *vx, scalar_field *vy, scalar_field *div,
             float dvdy = 0.0f;
             if (i != 0)
                 dudx = (GET(vx, i, j) - GET(vx, i - 1, j)) / dx;
+            else if (GET(dom, 0, ny / 2) == AIR)
+                dudx = 0;
             else
-                dudx = GET(vx, i, j) / dx;
+                dudx = (GET(vx, i, j) - speed_condition[0]) / dx;
             if (j != 0)
                 dvdy = (GET(vy, i, j) - GET(vy, i, j - 1)) / dx;
+            else if (GET(dom, nx / 2, 0) == AIR)
+                dvdy = 0;
             else
-                dvdy = GET(vy, i, j) / dx;
+                dvdy = (GET(vy, i, j) - speed_condition[3]) / dx;
 
             float d = dudx + dvdy;
             SET(div, i, j, d);
@@ -680,7 +685,7 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
                         loop = false;
                     }
 
-                    if (cell == SOLID) {
+                    if (cell == AIR || cell == SOLID) {
                         continue;
                     }
 
@@ -803,7 +808,7 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                     float v = speed_condition[0];
                     if (j < smooth)
                         v *= (float)j / smooth;
-                    if (j > vx_ny - smooth - 1)
+                    if (j > vx_ny - smooth)
                         v *= (float)(vx_ny - j - 1) / smooth;
                     SET(vx, i, j, v);
                 }
@@ -812,7 +817,7 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                     float v = speed_condition[1];
                     if (j < smooth)
                         v *= (float)j / smooth;
-                    if (j > vx_ny - smooth - 1)
+                    if (j > vx_ny - smooth)
                         v *= (float)(vx_ny - j - 1) / smooth;
                     SET(vx, i, j, v);
                 }
@@ -841,7 +846,7 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                     float v = speed_condition[3];
                     if (i < smooth)
                         v *= (float)i / smooth;
-                    if (i > vy_nx - smooth - 1)
+                    if (i > vy_nx - smooth)
                         v *= (float)(vy_nx - i - 1) / smooth;
                     SET(vy, i, j, v);
                 }
@@ -850,7 +855,7 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                     float v = speed_condition[2];
                     if (i < smooth)
                         v *= (float)i / smooth;
-                    if (i > vy_nx - smooth - 1)
+                    if (i > vy_nx - smooth)
                         v *= (float)(vy_nx - i - 1) / smooth;
                     SET(vy, i, j, v);
                 }
@@ -960,8 +965,8 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
         float x = particles->xyz[2 * p];
         float y = particles->xyz[2 * p + 1];
 
-        int i = floor(x / dx);
-        int j = floor(y / dx);
+        int i = floor(x / dx + 0.5);
+        int j = floor(y / dx + 0.5);
 
         if (i < 0 || j < 0 || i >= nx || j >= ny) {
             remove_particle(particles, p);
@@ -1118,6 +1123,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
     write_scalar_vtk(vy, 0, 0, log_file);
     write_scalar_vtk(p, 0, 0, log_file);
     write_scalar_vtk(div, 0, 0, log_file);
+    write_scalar_vtk(dom, 0, 0, log_file);
     for (int i = 0; i < fields.nb_fields; i++)
         write_scalar_vtk(fields.fields[i], 0, 0, log_file);
 
@@ -1131,7 +1137,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
         particles_speed_to_grid(particles, vx, vy, kern_sum_vx, kern_sum_vy,
                                 log_file);
 
-        divergence_pic(vx, vy, div, log_file);
+        divergence_pic(vx, vy, div, dom, speed_condition, log_file);
 
         // Making sure that the mean of the divergence is zero
         // Comes from an integral condition to have a solution
@@ -1157,7 +1163,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
 
         // This is to be able to save it. It serves no purpose in the
         // algorithm
-        divergence_pic(vx, vy, div, log_file);
+        divergence_pic(vx, vy, div, dom, speed_condition, log_file);
 
         grid_speed_to_particles(particles, vx, vy, log_file);
 
