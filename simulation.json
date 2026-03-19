@@ -6,41 +6,35 @@
 
 	"grid": [300, 300],
 	"space_steps": 0.1,
-	"nt": 100,
+	"nt": 200,
 	"delta_t": 0.05,
-	"tol": 1e-1,
+	"tol": 1e-2,
 	"max_iter": 25000,
 	"rho": 1000.0,
 
 	"bc": [
 		{
 			"side": 0,
-			"type": 2.0
+			"type": 1.0
 		},
 		{
 			"side": 1,
-			"type": 3.0,
-			"speed_x": -15.0
+			"type": 1.0
 		},
 		{
 			"side": 2,
-			"type": 1.0
+			"type": 3.0,
+			"speed_y": -10.0
 		},
 		{
 			"side": 3,
-			"type": 1.0
+			"type": 2.0
 		}
 	],
 
-	"particle_density": 8,
+	"particle_density": 16,
 
-
-	"ic_cylinders": [
-		{
-			"center": [150, 150],
-			"radius": 20
-		}
-	],
+	"ic_cylinders": [],
 
 	"fields": ["temperature"],
 

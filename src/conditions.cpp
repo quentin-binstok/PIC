@@ -1,11 +1,12 @@
 
 #include "conditions.hpp"
-#include <cstddef>
-#include <cstdlib>
-#include <fstream>
 #include "data.hpp"
 #include "nlohmann/json.hpp"
 #include "utils.hpp"
+#include <cstddef>
+#include <cstdlib>
+#include <fstream>
+
 using json = nlohmann::json;
 /*
  @brief Applies some initial conditions to the scalar field
@@ -20,7 +21,7 @@ int initialize_domain(scalar_field *dom, json &data, std::string condition_name,
                                                   << dom->name);
     auto condition = data[condition_name];
     int nx = dom->nx, ny = dom->ny;
-    
+
     for (int k = 0; k < (int)condition.size(); k++) {
         CELL_TYPE value = condition[k]["value"];
         int start_x = condition[k]["tl"][0], start_y = condition[k]["tl"][1];
@@ -66,8 +67,8 @@ int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
         const int start_y = condition[k]["tl"][1];
         const int end_x = condition[k]["br"][0];
         const int end_y = condition[k]["br"][1];
-        if (start_x + 1 < 0 || start_y +1  < 0 || end_x + 1 > nx -1 || 
-            end_y + 1 > ny -1) {
+        if (start_x + 1 < 0 || start_y + 1 < 0 || end_x + 1 > nx - 1 ||
+            end_y + 1 > ny - 1) {
             LOG_ERR(log_file, "Condition " << k << " in " << condition_name
                                            << " out of bounds");
             return EXIT_FAILURE;
@@ -91,10 +92,10 @@ int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
     return EXIT_SUCCESS;
 }
 
-
 // Initializes the speed fields
-int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom, json &data,
-                     std::string condition_name, std::ofstream &log_file) {
+int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom,
+                       std::vector<float> &speed_condition, json &data,
+                       std::string condition_name, std::ofstream &log_file) {
     LOG_INFO(log_file, "Applying " << condition_name << " on the boundaries");
     if (!data.contains(condition_name)) {
         LOG_WARN(log_file, "Condition " << condition_name << " not given");
@@ -106,6 +107,8 @@ int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom, js
         LOG_ERR(log_file, "Condition " << condition_name << " is not an array");
         return EXIT_FAILURE;
     }
+
+    speed_condition.resize(4);
     // Easy access to the condition
     auto condition = data[condition_name];
     int nx = dom->nx;
@@ -113,21 +116,24 @@ int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom, js
     for (int k = 0; k < (int)condition.size(); k++) {
         const float type = condition[k]["type"];
         const int side = condition[k]["side"];
+        speed_condition[k] = 0.0f;
 
         // speed is optional
         float speed_x = 0.0f;
         bool has_speed_x = condition[k].contains("speed_x");
         if (has_speed_x) {
             speed_x = condition[k]["speed_x"];
+            speed_condition[k] = speed_x;
         }
         float speed_y = 0.0f;
         bool has_speed_y = condition[k].contains("speed_y");
         if (has_speed_y) {
             speed_y = condition[k]["speed_y"];
+            speed_condition[k] = speed_y;
         }
 
         int smooth = 8;
-        
+
         switch (side) {
         case 0: {
             // left boundary
@@ -138,13 +144,13 @@ int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom, js
                 float v = speed_y;
 
                 // bottom ramp
-                if (j < smooth){
+                if (j < smooth) {
                     u = speed_x * (float)j / smooth;
                     v = speed_y * (float)j / smooth;
                 }
 
                 // top ramp
-                if (j > ny - smooth - 1){ 
+                if (j > ny - smooth - 1) {
                     u = speed_x * (float)(ny - j - 1) / smooth;
                     v = speed_y * (float)(ny - j - 1) / smooth;
                 }
@@ -160,16 +166,16 @@ int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom, js
                 float u = speed_x;
                 float v = speed_y;
                 // bottom ramp
-                if (j < smooth){
+                if (j < smooth) {
                     u = speed_x * (float)j / smooth;
                     v = speed_y * (float)j / smooth;
                 }
                 // top ramp
-                if (j > ny - smooth - 1){
+                if (j > ny - smooth - 1) {
                     u = speed_x * (float)(ny - j - 1) / smooth;
                     v = speed_y * (float)(ny - j - 1) / smooth;
                 }
-                SET(vx, nx - 1, j, u);  
+                SET(vx, nx - 1, j, u);
                 SET(vy, nx - 1, j, v);
             }
         } break;
@@ -180,12 +186,12 @@ int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom, js
                 float u = speed_x;
                 float v = speed_y;
                 // left ramp
-                if (i < smooth){
+                if (i < smooth) {
                     u = speed_x * (float)i / smooth;
                     v = speed_y * (float)i / smooth;
                 }
                 // right ramp
-                if (i > nx - smooth - 1){
+                if (i > nx - smooth - 1) {
                     u = speed_x * (float)(nx - i - 1) / smooth;
                     v = speed_y * (float)(nx - i - 1) / smooth;
                 }
@@ -200,12 +206,12 @@ int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom, js
                 float u = speed_x;
                 float v = speed_y;
                 // left ramp
-                if (i < smooth){
+                if (i < smooth) {
                     u = speed_x * (float)i / smooth;
                     v = speed_y * (float)i / smooth;
                 }
                 // right ramp
-                if (i > nx - smooth - 1){
+                if (i > nx - smooth - 1) {
                     u = speed_x * (float)(nx - i - 1) / smooth;
                     v = speed_y * (float)(nx - i - 1) / smooth;
                 }
@@ -214,16 +220,13 @@ int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom, js
             }
         } break;
         default:
-            LOG_ERR(log_file,
-                    "Condition " << k << " in " << condition_name << " has invalid side");
+            LOG_ERR(log_file, "Condition " << k << " in " << condition_name
+                                           << " has invalid side");
             return EXIT_FAILURE;
         }
     }
     return EXIT_SUCCESS;
 }
-
-
-
 
 // Function to initialize an arbitrary field
 int initialize_field(scalar_field *field, std::string condition_name,
