@@ -80,6 +80,7 @@ inline int get_speed(float *v_x, float *v_y, float x, float y, scalar_field *vx,
     int x_1, x_2, y_1, y_2;
     x_1 = (int)(x / dx - 0.5);
     x_1 = std::max(0, x_1);
+    x_1 = std::min(x_1, vx->nx - 2);
     if (x_1 > vx->nx - 1)
         LOG_WARN(log_file, "x_1 too big")
     x_2 = x_1 + 1;
@@ -111,6 +112,7 @@ inline int get_speed(float *v_x, float *v_y, float x, float y, scalar_field *vx,
 
     y_1 = (int)(y / dx - 0.5);
     y_1 = std::max(0, y_1);
+    y_1 = std::min(y_1, vy->ny - 2);
     if (y_1 > vy->ny - 1)
         LOG_WARN(log_file, "y_1 too big")
     y_2 = y_1 + 1;
@@ -331,40 +333,23 @@ inline int divergence_pic(scalar_field *vx, scalar_field *vy, scalar_field *div,
     float dx = div->dx;
 
 #pragma omp parallel for collapse(2)
-    // div has the size of pressure so even when i = nx-1 or j = ny-1, we can
-    // safely access vx and vy
-    for (int j = 1; j < ny; j++) {
-        for (int i = 1; i < nx; i++) {
-            float dudx = (GET(vx, i, j) - GET(vx, i - 1, j)) / dx;
-            float dvdy = (GET(vy, i, j) - GET(vy, i, j - 1)) / dx;
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            float dudx = 0.0f;
+            float dvdy = 0.0f;
+            if (i != 0)
+                dudx = (GET(vx, i, j) - GET(vx, i - 1, j)) / dx;
+            else
+                dudx = GET(vx, i, j) / dx;
+            if (j != 0)
+                dvdy = (GET(vy, i, j) - GET(vy, i, j - 1)) / dx;
+            else
+                dvdy = GET(vy, i, j) / dx;
+
             float d = dudx + dvdy;
             SET(div, i, j, d);
         }
     }
-
-    int j = 0;
-#pragma omp parallel for
-    for (int i = 1; i < nx; i++) {
-        float dudx = (GET(vx, i, j) - GET(vx, i - 1, j)) / dx;
-        float dvdy = (GET(vy, i, j)) / dx;
-        float d = dudx + dvdy;
-        SET(div, i, j, d);
-    }
-
-    int i = 0;
-#pragma omp parallel for
-    for (int j = 1; j < ny; j++) {
-        float dudx = (GET(vx, i, j)) / dx;
-        float dvdy = (GET(vy, i, j) - GET(vy, i, j - 1)) / dx;
-        float d = dudx + dvdy;
-        SET(div, i, j, d);
-    }
-
-    float dudx = (GET(vx, 0, 0)) / dx;
-    float dvdy = (GET(vy, 0, 0)) / dx;
-    float d = dudx + dvdy;
-    SET(div, 0, 0, d);
-
     return EXIT_SUCCESS;
 }
 
@@ -377,79 +362,92 @@ inline int divergence_pic(scalar_field *vx, scalar_field *vy, scalar_field *div,
 inline float residual_pic(scalar_field *p, scalar_field *vx, scalar_field *vy,
                           scalar_field *div, scalar_field *dom, float rho,
                           float dt, std::ofstream &log_file) {
-    // LOG_INFO(log_file, "Computing the residual");
-    if (0)
-        log_file << "dummy";
+    LOG_INFO(log_file, "Computing the residual");
 
     int nx = p->nx;
     int ny = p->ny;
+
     float dx = dom->dx;
     const float alpha = dx * dx * rho / dt;
     float beta = rho * dx / dt;
+
     float norm_squared = 0;
 
 #pragma omp parallel for collapse(2) reduction(+ : norm_squared)
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
-            if (GET(dom, i + 1, j + 1) == SOLID) {
+            int cell = GET(dom, i, j);
+
+            if (cell == SOLID)
                 continue;
-            }
 
-            float dom_left = GET(dom, i, j + 1);
-            float p_left = 0;
-            // need to extrapolate the speed
-            if (i == 0) {
-                // p_left = GET(p, i, j) -
-                //          beta * (2 * GET(vx, i, j) - GET(vx, i + 1, j));
+            float p_left, p_right, p_down, p_up;
+
+            // LEFT
+            if (i == 0)
                 p_left = GET(p, i, j);
-            } else if (dom_left == LIQUID) {
-                p_left = GET(p, i - 1, j);
-            } else if (dom_left == SOLID) {
-                p_left = GET(p, i, j) - beta * GET(vx, i - 1, j);
+            else {
+                int l = GET(dom, i - 1, j);
+                if (l == AIR) {
+                    p_left = 0.f;
+                } else if (l == SOLID) {
+                    p_left = GET(p, i, j) - beta * GET(vx, i - 1, j);
+                } else {
+                    p_left = GET(p, i - 1, j);
+                }
             }
 
-            float dom_right = GET(dom, i + 2, j + 1);
-            float p_right = 0;
-            // no need to extrapolate due to convention
-            if (i == nx - 1) {
+            // RIGHT
+            if (i == nx - 1)
                 p_right = GET(p, i, j);
-            } else if (dom_right == LIQUID) {
-                p_right = GET(p, i + 1, j);
-            } else if (dom_right == SOLID) {
-                p_right = GET(p, i, j) + beta * GET(vx, i, j);
+            else {
+                int r = GET(dom, i + 1, j);
+                if (r == AIR) {
+                    p_right = 0.f;
+                } else if (r == SOLID) {
+                    p_right = GET(p, i, j) + beta * GET(vx, i, j);
+                } else {
+                    p_right = GET(p, i + 1, j);
+                }
             }
 
-            float dom_down = GET(dom, i + 1, j);
-            float p_down = 0;
-            if (j == 0) {
-                // p_down = GET(p, i, j) -
-                //          beta * (2 * GET(vy, i, j) - GET(vy, i, j + 1));
+            // DOWN
+            if (j == 0)
                 p_down = GET(p, i, j);
-            } else if (dom_down == LIQUID) {
-                p_down = GET(p, i, j - 1);
-            } else if (dom_down == SOLID) {
-                p_down = GET(p, i, j) - beta * GET(vy, i, j - 1);
+            else {
+                int d = GET(dom, i, j - 1);
+                if (d == AIR) {
+                    p_down = 0.f;
+                } else if (d == SOLID) {
+                    p_down = GET(p, i, j) - beta * GET(vy, i, j - 1);
+                } else {
+                    p_down = GET(p, i, j - 1);
+                }
             }
 
-            float dom_up = GET(dom, i + 1, j + 2);
-            float p_up = 0;
-            // no need to extrapolate due to convention
-            if (j == ny - 1) {
+            // UP
+            if (j == ny - 1)
                 p_up = GET(p, i, j);
-            } else if (dom_up == LIQUID) {
-                p_up = GET(p, i, j + 1);
-            } else if (dom_up == SOLID) {
-                p_up = GET(p, i, j) + beta * GET(vy, i, j);
+            else {
+                int u = GET(dom, i, j + 1);
+                if (u == AIR) {
+                    p_up = 0.f;
+                } else if (u == SOLID) {
+                    p_up = GET(p, i, j) + beta * GET(vy, i, j);
+                } else {
+                    p_up = GET(p, i, j + 1);
+                }
             }
 
-            float residue = GET(p, i, j) - (p_left + p_right + p_down + p_up -
-                                            alpha * GET(div, i, j)) /
-                                               4.0;
+            float new_p =
+                (p_left + p_right + p_down + p_up - alpha * GET(div, i, j)) *
+                0.25f;
 
-            norm_squared += residue * residue;
+            float r = GET(p, i, j) - new_p;
+
+            norm_squared += r * r;
         }
     }
-
     return std::sqrt(norm_squared);
 }
 
@@ -475,113 +473,129 @@ inline int jacobi_pic(scalar_field *p, scalar_field *temp_p, scalar_field *div,
 
     int nx = p->nx;
     int ny = p->ny;
+
     float dx = dom->dx;
     const float alpha = dx * dx * rho / dt;
     float beta = rho * dx / dt;
+
     int iter = 0;
 
-    // as it's the one that has problems converging, putting this really
-    // high
-    if (first_loop) {
+    if (first_loop)
         max_iter = nx * ny;
-    }
 
     float norm_b = 0;
-    for (int j = 0; j < ny; j++) {
-        for (int i = 0; i < nx; i++) {
+
+    for (int j = 0; j < ny; j++)
+        for (int i = 0; i < nx; i++)
             norm_b += alpha * alpha * GET(div, i, j) * GET(div, i, j);
-        }
-    }
-    norm_b = std::sqrt(norm_b);
-    norm_b += 1e-7;
+
+    norm_b = std::sqrt(norm_b) + 1e-7f;
 
     float residue = residual_pic(p, vx, vy, div, dom, rho, dt, log_file);
-    float condition = residue / (norm_b);
+    float condition = residue / norm_b;
 
     bool inverted = false;
+    bool loop = true;
 
     while (condition > tol && iter < max_iter) {
+        if (iter % 100 == 0) {
+            LOG_INFO(log_file, "Jacobi on iteration "
+                                   << iter << ", criterion is " << condition);
+        }
         residue = 0;
+
 #pragma omp parallel for collapse(2) reduction(+ : residue)
         for (int j = 0; j < ny; j++) {
             for (int i = 0; i < nx; i++) {
-                if (GET(dom, i + 1, j + 1) == SOLID)
-                    continue;
+                int cell = GET(dom, i, j);
 
-                float dom_left = GET(dom, i, j + 1);
-                float p_left = 0;
-                // need to extrapolate the speed
-                if (i == 0) {
-                    // p_left = GET(p, i, j) -
-                    //          beta * (2 * GET(vx, i, j) - GET(vx, i + 1,
-                    //          j));
-                    p_left = GET(p, i, j);
-                } else if (dom_left == LIQUID) {
-                    p_left = GET(p, i - 1, j);
-                } else if (dom_left == SOLID) {
-                    p_left = GET(p, i, j) - beta * GET(vx, i - 1, j);
+                if (cell == AIR || cell == DIRICHLET) {
+                    loop = false;
                 }
 
-                float dom_right = GET(dom, i + 2, j + 1);
-                float p_right = 0;
-                // no need to extrapolate due to convention
+                if (cell == SOLID) {
+                    continue;
+                }
+
+                float p_left, p_right, p_down, p_up;
+
+                if (i == 0) {
+                    p_left = GET(p, i, j);
+                } else {
+                    int l = GET(dom, i - 1, j);
+                    if (l == AIR) {
+                        p_left = 0.f;
+                    } else if (l == SOLID) {
+                        p_left = GET(p, i, j) - beta * GET(vx, i - 1, j);
+                    } else {
+                        p_left = GET(p, i - 1, j);
+                    }
+                }
+
                 if (i == nx - 1) {
                     p_right = GET(p, i, j);
-                } else if (dom_right == LIQUID) {
-                    p_right = GET(p, i + 1, j);
-                } else if (dom_right == SOLID) {
-                    p_right = GET(p, i, j) + beta * GET(vx, i, j);
+                } else {
+                    int r = GET(dom, i + 1, j);
+                    if (r == AIR) {
+                        p_right = 0.f;
+                    } else if (r == SOLID) {
+                        p_right = GET(p, i, j) + beta * GET(vx, i, j);
+                    } else {
+                        p_right = GET(p, i + 1, j);
+                    }
                 }
 
-                float dom_down = GET(dom, i + 1, j);
-                float p_down = 0;
                 if (j == 0) {
-                    // p_down = GET(p, i, j) -
-                    //          beta * (2 * GET(vy, i, j) - GET(vy, i, j +
-                    //          1));
                     p_down = GET(p, i, j);
-                } else if (dom_down == LIQUID) {
-                    p_down = GET(p, i, j - 1);
-                } else if (dom_down == SOLID) {
-                    p_down = GET(p, i, j) - beta * GET(vy, i, j - 1);
+                } else {
+                    int d = GET(dom, i, j - 1);
+                    if (d == AIR) {
+                        p_down = 0.f;
+                    } else if (d == SOLID) {
+                        p_down = GET(p, i, j) - beta * GET(vy, i, j - 1);
+                    } else {
+                        p_down = GET(p, i, j - 1);
+                    }
                 }
 
-                float dom_up = GET(dom, i + 1, j + 2);
-                float p_up = 0;
-                // no need to extrapolate due to convention
                 if (j == ny - 1) {
                     p_up = GET(p, i, j);
-                } else if (dom_up == LIQUID) {
-                    p_up = GET(p, i, j + 1);
-                } else if (dom_up == SOLID) {
-                    p_up = GET(p, i, j) + beta * GET(vy, i, j);
+                } else {
+                    int u = GET(dom, i, j + 1);
+                    if (u == AIR) {
+                        p_up = 0.f;
+                    } else if (u == SOLID) {
+                        p_up = GET(p, i, j) + beta * GET(vy, i, j);
+                    } else {
+                        p_up = GET(p, i, j + 1);
+                    }
                 }
 
                 float new_p = (p_left + p_right + p_down + p_up -
-                               alpha * GET(div, i, j)) /
-                              4.0;
-                residue += (GET(p, i, j) - new_p) * (GET(p, i, j) - new_p);
+                               alpha * GET(div, i, j)) *
+                              0.25f;
+
+                float r = GET(p, i, j) - new_p;
+                residue += r * r;
 
                 SET(temp_p, i, j, new_p);
             }
         }
 
-        // removing the mean of the pressure, so that we can use Neumann
-        // conds only, instead of having to fix the pressure somewhere
-        float sum = 0;
-        for (int j = 0; j < ny; j++)
-            for (int i = 0; i < nx; i++)
-                sum += GET(temp_p, i, j);
+        if (loop) {
+            float sum = 0;
+#pragma omp parallel for collapse(2) reduction(+ : sum)
+            for (int j = 0; j < ny; j++)
+                for (int i = 0; i < nx; i++)
+                    sum += GET(p, i, j);
+            float mean = sum / (nx * ny);
+#pragma omp parallel for collapse(2)
+            for (int j = 0; j < ny; j++)
+                for (int i = 0; i < nx; i++)
+                    SET(p, i, j, GET(p, i, j) - mean);
+        }
 
-        float mean = sum / (nx * ny);
-        for (int j = 0; j < ny; j++)
-            for (int i = 0; i < nx; i++)
-                SET(temp_p, i, j, GET(temp_p, i, j) - mean);
-
-        // as we updated temp_p, we need to invert
-        scalar_field *tmp = p;
-        p = temp_p;
-        temp_p = tmp;
+        std::swap(p, temp_p);
         inverted = !inverted;
 
         residue = std::sqrt(residue);
@@ -590,19 +604,15 @@ inline int jacobi_pic(scalar_field *p, scalar_field *temp_p, scalar_field *div,
         iter++;
     }
 
-    if (iter == max_iter)
-        LOG_WARN(log_file, "Jacobi stopped at " << max_iter << " iterations")
-    else
+    if (iter == max_iter) {
+        LOG_WARN(log_file, "Jacobi stopped at " << max_iter << " iterations");
+    } else {
         LOG_INFO(log_file, "Jacobi converged in " << iter << " iterations");
+    }
     LOG_INFO(log_file, "Last residue: " << residue);
 
-    // to make sure that p has the right information for the rest of the
-    // time loop
-    if (inverted) {
-        scalar_field *tmp = p;
-        p = temp_p;
-        temp_p = tmp;
-    }
+    if (inverted)
+        std::swap(p, temp_p);
 
     return EXIT_SUCCESS;
 }
@@ -647,16 +657,13 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
 
     float residue = residual_pic(p, vx, vy, div, dom, rho, dt, log_file);
     float condition = residue / (norm_b);
+    bool loop = true;
 
-    // while (maxPdiff >
-    //            tol * std::max(*std::max_element(p->values, p->values + nx *
-    //            ny),
-    //                           1.0f) &&
-    //        iter < max_iter) {
     while ((condition > tol) && iter < max_iter) {
-        if (iter % 100 == 0)
+        if (iter % 100 == 0) {
             LOG_INFO(log_file, "SOR on iteration " << iter << ", criterion is "
                                                    << condition);
+        }
         residue = 0;
         // to be able to parallelize, need checkered grids
         for (int color = 0; color < 2; color++) {
@@ -667,56 +674,68 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
                     if ((i + j) % 2 != color)
                         continue;
 
-                    if (GET(dom, i + 1, j + 1) == SOLID)
-                        continue;
+                    int cell = GET(dom, i, j);
 
-                    float dom_left = GET(dom, i, j + 1);
-                    float p_left = 0;
-                    // need to extrapolate the speed
-                    if (i == 0) {
-                        // p_left = GET(p, i, j) -
-                        //          beta * (2 * GET(vx, i, j) - GET(vx, i +
-                        //          1, j));
-                        p_left = GET(p, i, j);
-                    } else if (dom_left == LIQUID) {
-                        p_left = GET(p, i - 1, j);
-                    } else if (dom_left == SOLID) {
-                        p_left = GET(p, i, j) - beta * GET(vx, i - 1, j);
+                    if (cell == AIR || cell == DIRICHLET) {
+                        loop = false;
                     }
 
-                    float dom_right = GET(dom, i + 2, j + 1);
-                    float p_right = 0;
-                    // no need to extrapolate due to convention
+                    if (cell == SOLID) {
+                        continue;
+                    }
+
+                    float p_left = 0, p_right = 0, p_down = 0, p_up = 0;
+
+                    if (i == 0) {
+                        p_left = GET(p, i, j);
+                    } else {
+                        int l = GET(dom, i - 1, j);
+                        if (l == AIR) {
+                            p_left = 0.f;
+                        } else if (l == SOLID) {
+                            p_left = GET(p, i, j) - beta * GET(vx, i - 1, j);
+                        } else {
+                            p_left = GET(p, i - 1, j);
+                        }
+                    }
+
                     if (i == nx - 1) {
                         p_right = GET(p, i, j);
-                    } else if (dom_right == LIQUID) {
-                        p_right = GET(p, i + 1, j);
-                    } else if (dom_right == SOLID) {
-                        p_right = GET(p, i, j) + beta * GET(vx, i, j);
+                    } else {
+                        int r = GET(dom, i + 1, j);
+                        if (r == AIR) {
+                            p_right = 0.f;
+                        } else if (r == SOLID) {
+                            p_right = GET(p, i, j) + beta * GET(vx, i, j);
+                        } else {
+                            p_right = GET(p, i + 1, j);
+                        }
                     }
 
-                    float dom_down = GET(dom, i + 1, j);
-                    float p_down = 0;
                     if (j == 0) {
-                        // p_down = GET(p, i, j) -
-                        //          beta * (2 * GET(vy, i, j) - GET(vy, i, j
-                        //          + 1));
                         p_down = GET(p, i, j);
-                    } else if (dom_down == LIQUID) {
-                        p_down = GET(p, i, j - 1);
-                    } else if (dom_down == SOLID) {
-                        p_down = GET(p, i, j) - beta * GET(vy, i, j - 1);
+                    } else {
+                        int d = GET(dom, i, j - 1);
+                        if (d == AIR) {
+                            p_down = 0.f;
+                        } else if (d == SOLID) {
+                            p_down = GET(p, i, j) - beta * GET(vy, i, j - 1);
+                        } else {
+                            p_down = GET(p, i, j - 1);
+                        }
                     }
 
-                    float dom_up = GET(dom, i + 1, j + 2);
-                    float p_up = 0;
-                    // no need to extrapolate due to convention
                     if (j == ny - 1) {
                         p_up = GET(p, i, j);
-                    } else if (dom_up == LIQUID) {
-                        p_up = GET(p, i, j + 1);
-                    } else if (dom_up == SOLID) {
-                        p_up = GET(p, i, j) + beta * GET(vy, i, j);
+                    } else {
+                        int u = GET(dom, i, j + 1);
+                        if (u == AIR) {
+                            p_up = 0.f;
+                        } else if (u == SOLID) {
+                            p_up = GET(p, i, j) + beta * GET(vy, i, j);
+                        } else {
+                            p_up = GET(p, i, j + 1);
+                        }
                     }
 
                     float new_p = (p_left + p_right + p_down + p_up -
@@ -727,20 +746,18 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
                 }
             }
         }
-
-        // Need to remove the mean pressure, so that we have a condition in
-        // addition to the Neumann ones
-        float sum = 0;
+        if (loop) {
+            float sum = 0;
 #pragma omp parallel for collapse(2) reduction(+ : sum)
-        for (int j = 0; j < ny; j++)
-            for (int i = 0; i < nx; i++)
-                sum += GET(p, i, j);
-
-        float mean = sum / (nx * ny);
+            for (int j = 0; j < ny; j++)
+                for (int i = 0; i < nx; i++)
+                    sum += GET(p, i, j);
+            float mean = sum / (nx * ny);
 #pragma omp parallel for collapse(2)
-        for (int j = 0; j < ny; j++)
-            for (int i = 0; i < nx; i++)
-                SET(p, i, j, GET(p, i, j) - mean);
+            for (int j = 0; j < ny; j++)
+                for (int i = 0; i < nx; i++)
+                    SET(p, i, j, GET(p, i, j) - mean);
+        }
 
         residue = std::sqrt(residue);
         condition = residue / norm_b;
@@ -766,50 +783,88 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
 */
 inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                                 scalar_field *vy, scalar_field *dom, float dx,
-                                float dt, float rho, std::ofstream &log_file) {
+                                float dt, float rho, std::ofstream &log_file,
+                                std::vector<float> &speed_condition) {
     LOG_INFO(log_file, "Projecting the velocity field")
-
     int vx_nx = vx->nx;
     int vx_ny = vx->ny;
-    int p_nx = p->nx;
-
+    int vy_nx = vy->nx;
+    int vy_ny = vy->ny;
+    int smooth = 8;
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < vx_ny; j++) {
         for (int i = 0; i < vx_nx; i++) {
-            if (GET(dom, i + 2, j + 1) == SOLID ||
-                GET(dom, i + 1, j + 1) == SOLID) {
+            if (GET(dom, i, j) == SOLID || GET(dom, i + 1, j) == SOLID) {
                 SET(vx, i, j, 0.0);
                 continue;
             }
-            if (i == p_nx)
-                continue;
+            if (GET(dom, i, j) == DIRICHLET) {
+                if (i == 0) {
+                    float v = speed_condition[0];
+                    if (j < smooth)
+                        v *= (float)j / smooth;
+                    if (j > vx_ny - smooth - 1)
+                        v *= (float)(vx_ny - j - 1) / smooth;
+                    SET(vx, i, j, v);
+                }
 
+                if (i == vx_nx - 1) {
+                    float v = speed_condition[1];
+                    if (j < smooth)
+                        v *= (float)j / smooth;
+                    if (j > vx_ny - smooth - 1)
+                        v *= (float)(vx_ny - j - 1) / smooth;
+                    SET(vx, i, j, v);
+                }
+
+                continue;
+            }
+            if (i == vx_nx - 1) {
+                float gradp_x = (GET(p, i, j) - GET(p, i - 1, j)) / dx;
+                SET(vx, i, j, GET(vx, i, j) - dt * gradp_x / rho);
+                continue;
+            }
             float gradp_x = (GET(p, i + 1, j) - GET(p, i, j)) / dx;
             SET(vx, i, j, GET(vx, i, j) - dt * gradp_x / rho);
         }
     }
 
-    int vy_nx = vy->nx;
-    int vy_ny = vy->ny;
-    int p_ny = p->ny;
-
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < vy_ny; j++) {
         for (int i = 0; i < vy_nx; i++) {
-            if (GET(dom, i + 1, j + 2) == SOLID ||
-                GET(dom, i + 1, j + 1) == SOLID) {
+            if (GET(dom, i, j) == SOLID || GET(dom, i, j + 1) == SOLID) {
                 SET(vy, i, j, 0.0);
                 continue;
             }
+            if (GET(dom, i, j) == DIRICHLET) {
+                if (j == 0) {
+                    float v = speed_condition[3];
+                    if (i < smooth)
+                        v *= (float)i / smooth;
+                    if (i > vy_nx - smooth - 1)
+                        v *= (float)(vy_nx - i - 1) / smooth;
+                    SET(vy, i, j, v);
+                }
 
-            if (j == p_ny)
+                if (j == vy_ny - 1) {
+                    float v = speed_condition[2];
+                    if (i < smooth)
+                        v *= (float)i / smooth;
+                    if (i > vy_nx - smooth - 1)
+                        v *= (float)(vy_nx - i - 1) / smooth;
+                    SET(vy, i, j, v);
+                }
                 continue;
-
+            }
+            if (j == vy_ny - 1) {
+                float gradp_y = (GET(p, i, j) - GET(p, i, j - 1)) / dx;
+                SET(vy, i, j, GET(vy, i, j) - dt * gradp_y / rho);
+                continue;
+            }
             float gradp_y = (GET(p, i, j + 1) - GET(p, i, j)) / dx;
             SET(vy, i, j, GET(vy, i, j) - dt * gradp_y / rho);
         }
     }
-
     return EXIT_SUCCESS;
 }
 
@@ -820,7 +875,7 @@ inline void initialize_particles_pic(particle_field *particles,
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<double> dist(-0.5 * dom->dx, 0.5 * dom->dx);
-    int nx = dom->nx - 1, ny = dom->ny - 1;
+    int nx = dom->nx, ny = dom->ny;
     float dx = dom->dx;
 
     int nb_not_fluid_cases = 0;
@@ -828,8 +883,8 @@ inline void initialize_particles_pic(particle_field *particles,
 
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
-            float cell = GET(dom, i + 1, j + 1);
-            if (cell == LIQUID) {
+            float cell = GET(dom, i, j);
+            if (cell != SOLID) {
                 for (int k = 0; k < density; k++) {
                     float x = i * dx + dist(gen);
                     float y = j * dx + dist(gen);
@@ -855,6 +910,115 @@ inline void initialize_particles_pic(particle_field *particles,
     particles->xyz.resize(current_id);
     particles->velocity.resize(current_id);
     particles->id.resize(current_id);
+}
+
+void remove_particle(particle_field *particles, int p) {
+    // verify that the particle index is valid
+    assert(particles->N > 0);
+    assert((int)particles->xyz.size() == 2 * particles->N);
+    assert((int)particles->velocity.size() == 2 * particles->N);
+    assert((int)particles->id.size() == particles->N);
+
+    int last = particles->N - 1;
+
+    // move the last particle to the position of the removed particle
+    particles->xyz[2 * p] = particles->xyz[2 * last];
+    particles->xyz[2 * p + 1] = particles->xyz[2 * last + 1];
+
+    particles->velocity[2 * p] = particles->velocity[2 * last];
+    particles->velocity[2 * p + 1] = particles->velocity[2 * last + 1];
+
+    particles->id[p] = particles->id[last];
+
+    // remove the last particle
+    particles->N--;
+    particles->xyz.resize(2 * particles->N);
+    particles->velocity.resize(2 * particles->N);
+    particles->id.resize(particles->N);
+}
+
+inline int update_particles_pic(particle_field *particles, scalar_field *vx,
+                                scalar_field *vy, scalar_field *dom,
+                                std::vector<int> &density,
+                                std::ofstream &log_file) {
+    LOG_INFO(log_file, "Updating particles")
+
+    int nx = dom->nx;
+    int ny = dom->ny;
+    float dx = dom->dx;
+
+    std::fill(density.begin(), density.end(), 0);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> dist(-0.5f * dx, 0.5f * dx);
+
+    // remove invalid particles
+    int p = 0;
+    while (p < particles->N) {
+
+        float x = particles->xyz[2 * p];
+        float y = particles->xyz[2 * p + 1];
+
+        int i = floor(x / dx);
+        int j = floor(y / dx);
+
+        if (i < 0 || j < 0 || i >= nx || j >= ny) {
+            remove_particle(particles, p);
+            continue;
+        }
+
+        float cell = GET(dom, i, j);
+        if (cell == SOLID) {
+            remove_particle(particles, p);
+            continue;
+        }
+
+        density[j * nx + i]++;
+
+        p++;
+    }
+
+    // enforce particle density
+    int target = 16;
+
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+
+            float cell = GET(dom, i, j);
+
+            if (cell == SOLID)
+                continue;
+
+            int d = density[j * nx + i];
+
+            if (d < target) {
+
+                int to_add = target - d;
+
+                for (int k = 0; k < to_add; k++) {
+
+                    float x = (i)*dx + dist(gen);
+                    float y = (j)*dx + dist(gen);
+
+                    particles->xyz.push_back(x);
+                    particles->xyz.push_back(y);
+
+                    float vx_p, vy_p;
+                    get_speed(&vx_p, &vy_p, x, y, vx, vy, log_file);
+
+                    particles->velocity.push_back(vx_p);
+                    particles->velocity.push_back(vy_p);
+
+                    particles->id.push_back(particles->N);
+
+                    particles->N++;
+                }
+            }
+        }
+    }
+
+    return EXIT_SUCCESS;
 }
 
 /*
@@ -903,14 +1067,11 @@ int solver_pic(json &data, std::ofstream &log_file) {
     get_fields(&fields, data, log_file);
 
     // Initialising the fields
-    scalar_field *vx =
-        scalar_field_init("vx", nx + 1, ny, 0.5, 0, dx, log_file);
-    scalar_field *vy =
-        scalar_field_init("vy", nx, ny + 1, 0, 0.5, dx, log_file);
+    scalar_field *vx = scalar_field_init("vx", nx, ny, 0.5, 0, dx, log_file);
+    scalar_field *vy = scalar_field_init("vy", nx, ny, 0, 0.5, dx, log_file);
     scalar_field *p = scalar_field_init("p", nx, ny, 0, 0, dx, log_file);
     scalar_field *div = scalar_field_init("div", nx, ny, 0, 0, dx, log_file);
-    scalar_field *dom =
-        scalar_field_init("dom", nx + 2, ny + 2, 0, 0, dx, log_file);
+    scalar_field *dom = scalar_field_init("dom", nx, ny, 0, 0, dx, log_file);
 
     scalar_field *kern_sum_vx =
         scalar_field_init("kern_sum_vx", nx, ny, 0, 0, dx, log_file);
@@ -922,11 +1083,14 @@ int solver_pic(json &data, std::ofstream &log_file) {
         return EXIT_FAILURE;
     }
 
+    std::vector<float> speed_condition;
+
     // Applying the initial conditions
     initialize_domain(dom, data, "ic_cell", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
     initialize_speed(vx, dom, data, "ic_vx", log_file);
     initialize_speed(vy, dom, data, "ic_vy", log_file);
+    boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
 
     // scalar_field *temp_vx = scalar_field_copy(vx, log_file);
     // scalar_field *temp_vy = scalar_field_copy(vy, log_file);
@@ -964,6 +1128,9 @@ int solver_pic(json &data, std::ofstream &log_file) {
         log_file << "\n";
         LOG_INFO(log_file, "Starting time loop " << i << " out of " << nt);
 
+        particles_speed_to_grid(particles, vx, vy, kern_sum_vx, kern_sum_vy,
+                                log_file);
+
         divergence_pic(vx, vy, div, log_file);
 
         // Making sure that the mean of the divergence is zero
@@ -985,7 +1152,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
             return EXIT_FAILURE;
         }
 
-        project_velocity_pic(p, vx, vy, dom, dx, dt, rho, log_file);
+        project_velocity_pic(p, vx, vy, dom, dx, dt, rho, log_file,
+                             speed_condition);
 
         // This is to be able to save it. It serves no purpose in the
         // algorithm
@@ -1007,9 +1175,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
         }
 
         advect_pic(particles, vx, vy, dt, log_file);
-
-        particles_speed_to_grid(particles, vx, vy, kern_sum_vx, kern_sum_vy,
-                                log_file);
+        std::vector<int> density(nx * ny, 0);
+        update_particles_pic(particles, vx, vy, dom, density, log_file);
 
         // advect
         // advect_pic_old(vx, vy, dt, vx, temp_vx, log_file);
@@ -1036,12 +1203,6 @@ int solver_pic(json &data, std::ofstream &log_file) {
         // temp_vy = invert_vy;
 
         first_loop = false;
-
-        // Resetting the pressure field
-#pragma omp parallel for collapse(2)
-        for (unsigned int j = 0; j < ny; j++)
-            for (unsigned int i = 0; i < nx; i++)
-                SET(p, i, j, 0.0f);
     }
 
     // As we're not using objects, we need this

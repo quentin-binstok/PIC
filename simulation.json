@@ -4,89 +4,45 @@
 	"sampling_rate": 1,
 	"log_file": "log.txt",
 
-	"grid": [2500, 2500],
+	"grid": [300, 300],
 	"space_steps": 0.1,
-	"nt": 100,
-	"delta_t": 0.1,
-	"tol": 1e-1,
+	"nt": 200,
+	"delta_t": 0.05,
+	"tol": 1e-2,
 	"max_iter": 25000,
 	"rho": 1000.0,
 
-	"bc": 1.0,
-
-	"particle_density": 8,
-
-	"ic_vx": [
+	"bc": [
 		{
-			"tl": [100, 1175],
-			"br": [750, 1325],
-			"value": 5.0
-		}
-	],
-
-	"ic_vy": [
-		{
-			"tl": [190, 260],
-			"br": [230, 290],
-			"value": 0.0
-		}
-	],
-
-	"ic_cell": [
-		{
-			"tl": [250, 250],
-			"br": [1125, 1125],
-			"value": 1.0
+			"side": 0,
+			"type": 1.0
 		},
 		{
-			"tl": [1375, 1375],
-			"br": [2250, 2250],
-			"value": 1.0
+			"side": 1,
+			"type": 1.0
 		},
 		{
-			"tl": [250, 1375],
-			"br": [1125, 2250],
-			"value": 1.0
+			"side": 2,
+			"type": 3.0,
+			"speed_y": -10.0
 		},
 		{
-			"tl": [1375, 250],
-			"br": [2250, 1125],
-			"value": 1.0
+			"side": 3,
+			"type": 2.0
 		}
 	],
 
-	"ic_cylinders": [
-		{
-			"center": [1250, 1250],
-			"radius": 50
-		}
-	],
+	"particle_density": 16,
 
-	"fields": ["temperature", "concentration"],
+	"ic_cylinders": [],
+
+	"fields": ["temperature"],
 
 	"temperature": [
 		{
-			"tl": [200, 235],
-			"br": [230, 265],
+			"tl": [25, 25],
+			"br": [125, 150],
 			"value": 5.0
-		},
-		{
-			"tl": [50, 235],
-			"br": [90, 265],
-			"value": 5.0
-		},
-		{
-			"tl": [235, 400],
-			"br": [265, 450],
-			"value": 5.0
-		}
-	],
-
-	"concentration": [
-		{
-			"tl": [30, 235],
-			"br": [80, 265],
-			"value": 10.0
 		}
 	]
 }

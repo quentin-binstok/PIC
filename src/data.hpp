@@ -1,4 +1,3 @@
-
 #ifndef __SOLVER_DATA__
 #define __SOLVER_DATA__
 #include <string>

@@ -9,14 +9,11 @@
 #include <omp.h>
 #endif
 #include "nlohmann/json.hpp"
-
 #include "data.hpp"
 #include "pic.hpp"
 #include "semiLagrangian.hpp"
 #include "utils.hpp"
-
 using json = nlohmann::json;
-
 int main(int argc, char **argv) {
     // Check args
     if (argc != 2) {
@@ -34,19 +31,16 @@ int main(int argc, char **argv) {
         log_file_path = data["log_file"];
     else
         log_file_path = "log.txt";
-
     std::ofstream log_file(log_file_path, std::ios::out | std::ios::app);
     if (!log_file.is_open()) {
         std::cerr << "Could not open the log file: " << log_file_path << "\n";
         return EXIT_FAILURE;
     }
-
     // Starting log file, with starting time
     time_t timestamp;
     time(&timestamp);
     LOG_INFO(log_file, "STARTING SIMULATION");
     LOG_INFO(log_file, "Date: " << ctime(&timestamp));
-
     // OMP log
 #ifdef _OPENMP
     LOG_INFO(log_file,
@@ -62,12 +56,10 @@ int main(int argc, char **argv) {
     // code has been configured with "cmake .."
     LOG_INFO(log_file, "Code built in DEBUG mode.");
 #endif
-
     // Launches the solver, using a common error handling
     int ret = 0;
     if (data["solver"] == "semi-lagrangian") {
         ret = solver_semi_lagrangian(data, log_file);
-
     } else if (data["solver"] == "pic") {
         ret = solver_pic(data, log_file);
     } else {
@@ -75,14 +67,11 @@ int main(int argc, char **argv) {
         LOG_ERR(log_file, "Exiting.")
         return EXIT_FAILURE;
     }
-
     if (ret == EXIT_FAILURE) {
         LOG_ERR(log_file, "An error occured in the solver.");
         return EXIT_FAILURE;
     }
-
     // no forgetting that
     log_file.close();
-
     return EXIT_SUCCESS;
 }
