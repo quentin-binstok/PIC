@@ -132,7 +132,7 @@ int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom,
             speed_condition[k] = speed_y;
         }
 
-        int smooth = 8;
+        int smooth = 0;
 
         switch (side) {
         case 0: {

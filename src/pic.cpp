@@ -94,9 +94,10 @@ inline int get_speed(float *v_x, float *v_y, float x, float y, scalar_field *vx,
     y_2 = y_1 + 1;
     y_2 = std::min(vx->ny - 1, y_2);
 
-    *v_x = interpolate_bilinear(x, y, (x_1 + vx->x_internal) * dx,
-                                (y_1 + vx->y_internal) * dx, GET(vx, x_1, y_1),
-                                GET(vx, x_2, y_1), GET(vx, x_1, y_2),
+    float x0 = (x_1 + vx->x_internal) * dx;
+    float y0 = (y_1 + vx->y_internal) * dx;
+
+    *v_x = interpolate_bilinear(x, y, x0, y0, GET(vx, x_1, y_1), GET(vx, x_2, y_1), GET(vx, x_1, y_2),
                                 GET(vx, x_2, y_2), dx, dx);
 
     // vy
@@ -118,9 +119,10 @@ inline int get_speed(float *v_x, float *v_y, float x, float y, scalar_field *vx,
     y_2 = y_1 + 1;
     y_2 = std::min(vy->ny - 1, y_2);
 
-    *v_y = interpolate_bilinear(x, y, (x_1 + vy->x_internal) * dx,
-                                (y_1 + vy->y_internal) * dx, GET(vy, x_1, y_1),
-                                GET(vy, x_2, y_1), GET(vy, x_1, y_2),
+    x0 = (x_1 + vy->x_internal) * dx;
+    y0 = (y_1 + vy->y_internal) * dx;
+
+    *v_y = interpolate_bilinear(x, y, x0, y0, GET(vy, x_1, y_1), GET(vy, x_2, y_1), GET(vy, x_1, y_2),
                                 GET(vy, x_2, y_2), dx, dx);
 
     return EXIT_SUCCESS;
@@ -795,7 +797,7 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
     int vx_ny = vx->ny;
     int vy_nx = vy->nx;
     int vy_ny = vy->ny;
-    int smooth = 8;
+    int smooth = 0;
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < vx_ny; j++) {
         for (int i = 0; i < vx_nx; i++) {
@@ -886,6 +888,9 @@ inline void initialize_particles_pic(particle_field *particles,
     int nb_not_fluid_cases = 0;
     int current_id = 0;
 
+    particles->xyz.resize(2 * density * nx * ny);
+    particles->velocity.resize(2 * density * nx * ny);
+
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
             float cell = GET(dom, i, j);
@@ -911,39 +916,42 @@ inline void initialize_particles_pic(particle_field *particles,
         }
     }
 
+    // After the loop:
     particles->N = current_id;
-    particles->xyz.resize(current_id);
-    particles->velocity.resize(current_id);
+    particles->next_id = current_id;  // next to assign = current_id
+    particles->xyz.resize(2 * current_id);
+    particles->velocity.resize(2 * current_id);
+
+    // Fill ids properly
     particles->id.resize(current_id);
+    std::iota(particles->id.begin(), particles->id.end(), 0);
 }
 
 void remove_particle(particle_field *particles, int p) {
-    // verify that the particle index is valid
-    assert(particles->N > 0);
-    assert((int)particles->xyz.size() == 2 * particles->N);
-    assert((int)particles->velocity.size() == 2 * particles->N);
-    assert((int)particles->id.size() == particles->N);
-
     int last = particles->N - 1;
 
-    // move the last particle to the position of the removed particle
-    particles->xyz[2 * p] = particles->xyz[2 * last];
-    particles->xyz[2 * p + 1] = particles->xyz[2 * last + 1];
+    // Early exit if removing the last particle (no swap needed)
+    if (p != last) {
+        std::swap(particles->xyz[2 * p],     particles->xyz[2 * last]);
+        std::swap(particles->xyz[2 * p + 1], particles->xyz[2 * last + 1]);
 
-    particles->velocity[2 * p] = particles->velocity[2 * last];
-    particles->velocity[2 * p + 1] = particles->velocity[2 * last + 1];
+        std::swap(particles->velocity[2 * p],     particles->velocity[2 * last]);
+        std::swap(particles->velocity[2 * p + 1], particles->velocity[2 * last + 1]);
 
-    particles->id[p] = particles->id[last];
+        std::swap(particles->id[p], particles->id[last]);
+    }
 
-    // remove the last particle
+    particles->xyz.pop_back();
+    particles->xyz.pop_back();
+    particles->velocity.pop_back();
+    particles->velocity.pop_back();
+    particles->id.pop_back();
+
     particles->N--;
-    particles->xyz.resize(2 * particles->N);
-    particles->velocity.resize(2 * particles->N);
-    particles->id.resize(particles->N);
 }
 
 inline int update_particles_pic(particle_field *particles, scalar_field *vx,
-                                scalar_field *vy, scalar_field *dom,
+                                scalar_field *vy, scalar_field *dom, int creation_rate, float dt,
                                 std::vector<int> &density,
                                 std::ofstream &log_file) {
     LOG_INFO(log_file, "Updating particles")
@@ -956,23 +964,27 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> dist(-0.5f * dx, 0.5f * dx);
+    std::uniform_real_distribution<float> jitter(-0.5 * dx, 0.5 * dx);
+    std::uniform_real_distribution<float> prob(0.0f, 1.0f);
+    std::uniform_real_distribution<float> birth_dist(0.0f, dt);
 
-    // remove invalid particles
+    // Remove invalid particles
     int p = 0;
     while (p < particles->N) {
 
         float x = particles->xyz[2 * p];
         float y = particles->xyz[2 * p + 1];
 
-        int i = floor(x / dx + 0.5);
-        int j = floor(y / dx + 0.5);
+        int i = (int)floor(x / dx + 0.5f);
+        int j = (int)floor(y / dx + 0.5f);
 
+        // Check if the particle is out of bounds
         if (i < 0 || j < 0 || i >= nx || j >= ny) {
             remove_particle(particles, p);
             continue;
         }
 
+        // Check if the particle is in a solid cell
         float cell = GET(dom, i, j);
         if (cell == SOLID) {
             remove_particle(particles, p);
@@ -980,44 +992,55 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
         }
 
         density[j * nx + i]++;
-
         p++;
     }
 
-    // enforce particle density
-    int target = 16;
-
+    // Emit new particles from (inflow) cells
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
 
             float cell = GET(dom, i, j);
 
-            if (cell == SOLID)
-                continue;
-
-            int d = density[j * nx + i];
-
-            if (d < target) {
-
-                int to_add = target - d;
+            if (cell == DIRICHLET) {
+                float n = dt * creation_rate;
+                float frac = n - floor(n);
+                int to_add = (int)floor(n) + (prob(gen) < frac ? 1 : 0);
 
                 for (int k = 0; k < to_add; k++) {
 
-                    float x = (i)*dx + dist(gen);
-                    float y = (j)*dx + dist(gen);
-
-                    particles->xyz.push_back(x);
-                    particles->xyz.push_back(y);
+                    // Jittered spawn position within the cell
+                    float x = i * dx + jitter(gen);
+                    float y = j * dx + jitter(gen);
 
                     float vx_p, vy_p;
                     get_speed(&vx_p, &vy_p, x, y, vx, vy, log_file);
 
-                    particles->velocity.push_back(vx_p);
-                    particles->velocity.push_back(vy_p);
+                    float tau = birth_dist(gen);
+                    float remaining = dt - tau;
+                    x += vx_p * remaining;
+                    y += vy_p * remaining;
 
-                    particles->id.push_back(particles->N);
+                    int fi = (int)floor(x / dx + 0.5f);
+                    int fj = (int)floor(y / dx + 0.5f);
 
-                    particles->N++;
+                    if (fi < 0 || fj < 0 || fi >= nx || fj >= ny){
+                        continue;
+                    } else if (GET(dom, fi, fj) == SOLID){
+                        continue;
+                    } else {
+                        particles->xyz.push_back(x);
+                        particles->xyz.push_back(y);
+
+                        particles->velocity.push_back(vx_p);
+                        particles->velocity.push_back(vy_p);
+
+                        particles->id.push_back(particles->next_id);
+                        particles->next_id++;
+                        particles->N++;
+
+                        density[fj * nx + fi]++;
+
+                    }
                 }
             }
         }
@@ -1067,6 +1090,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
         max_iter = data["max_iter"];
 
     int density = data.value("particle_density", 2);
+    int creation_rate = data.value("creation_rate", 1000);
 
     user_fields fields;
     get_fields(&fields, data, log_file);
@@ -1182,7 +1206,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
 
         advect_pic(particles, vx, vy, dt, log_file);
         std::vector<int> density(nx * ny, 0);
-        update_particles_pic(particles, vx, vy, dom, density, log_file);
+        update_particles_pic(particles, vx, vy, dom, creation_rate, dt, density, log_file);
 
         // advect
         // advect_pic_old(vx, vy, dt, vx, temp_vx, log_file);
