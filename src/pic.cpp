@@ -720,8 +720,13 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
                         loop = false;
                     }
 
-                    if (cell == AIR || cell == SOLID) {
+                    if (cell == SOLID) {
                         continue;
+                    }
+
+                    if (cell == AIR) {
+                        if (i == 0 || i == nx - 1 || j == 0 || j == ny - 1)
+                            continue;
                     }
 
                     float p_left = 0, p_right = 0, p_down = 0, p_up = 0;
@@ -1084,6 +1089,116 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
     return EXIT_SUCCESS;
 }
 
+void refill_domain(particle_field *particles, scalar_field *dom,
+                   scalar_field *vx, scalar_field *vy,
+                   std::vector<int> &density, int particle_density,
+                   float percent_limit, float dt, std::ofstream &log_file) {
+    int nx = dom->nx, ny = dom->ny;
+    float dx = dom->dx;
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> jitter(-0.5 * dx, 0.5 * dx);
+    std::uniform_real_distribution<float> prob(0.0f, 1.0f);
+    std::uniform_real_distribution<float> birth_dist(0.0f, dt);
+
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            float cell_type = GET(dom, i, j);
+            int cell_density = density[j * nx + i];
+
+            if (cell_type == LIQUID) {
+                // 0.4 is arbitrary
+                if (cell_density >= percent_limit * particle_density) {
+                    int to_add = std::max(
+                        0, (int)floor(particle_density - cell_density));
+
+                    for (int k = 0; k < to_add; k++) {
+                        // Jittered spawn position within the cell
+                        float x = i * dx + jitter(gen);
+                        float y = j * dx + jitter(gen);
+
+                        float vx_p, vy_p;
+                        get_speed(&vx_p, &vy_p, x, y, vx, vy, log_file);
+
+                        float tau = birth_dist(gen);
+                        float remaining = dt - tau;
+                        advect_single_particle(&x, &y, vx, vy, remaining,
+                                               log_file);
+
+                        int fi = (int)floor(x / dx + 0.5f);
+                        int fj = (int)floor(y / dx + 0.5f);
+
+                        if (fi < 0 || fj < 0 || fi >= nx || fj >= ny) {
+                            continue;
+                        } else if (GET(dom, fi, fj) == SOLID) {
+                            continue;
+                        } else {
+                            particles->xyz.push_back(x);
+                            particles->xyz.push_back(y);
+
+                            particles->velocity.push_back(vx_p);
+                            particles->velocity.push_back(vy_p);
+
+                            particles->id.push_back(particles->next_id);
+                            particles->next_id++;
+                            particles->N++;
+
+                            density[fj * nx + fi]++;
+                        }
+                    }
+                }
+                // change to air
+                else {
+                    SET(dom, i, j, AIR);
+                }
+            } else if (cell_type == AIR && i != 0 && i != nx - 1 && j != 0 &&
+                       j != ny - 1) {
+                if (cell_density >= percent_limit * particle_density) {
+                    SET(dom, i, j, LIQUID);
+                    int to_add = std::max(
+                        0, (int)floor(particle_density - cell_density));
+
+                    for (int k = 0; k < to_add; k++) {
+                        // Jittered spawn position within the cell
+                        float x = i * dx + jitter(gen);
+                        float y = j * dx + jitter(gen);
+
+                        float vx_p, vy_p;
+                        get_speed(&vx_p, &vy_p, x, y, vx, vy, log_file);
+
+                        float tau = birth_dist(gen);
+                        float remaining = dt - tau;
+                        advect_single_particle(&x, &y, vx, vy, remaining,
+                                               log_file);
+
+                        int fi = (int)floor(x / dx + 0.5f);
+                        int fj = (int)floor(y / dx + 0.5f);
+
+                        if (fi < 0 || fj < 0 || fi >= nx || fj >= ny) {
+                            continue;
+                        } else if (GET(dom, fi, fj) == SOLID) {
+                            continue;
+                        } else {
+                            particles->xyz.push_back(x);
+                            particles->xyz.push_back(y);
+
+                            particles->velocity.push_back(vx_p);
+                            particles->velocity.push_back(vy_p);
+
+                            particles->id.push_back(particles->next_id);
+                            particles->next_id++;
+                            particles->N++;
+
+                            density[fj * nx + fi]++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /*
  @brief the PIC/FLIP
  @param data: the whole json
@@ -1124,8 +1239,9 @@ int solver_pic(json &data, std::ofstream &log_file) {
     if (data.contains("max_iter"))
         max_iter = data["max_iter"];
 
-    int density = data.value("particle_density", 2);
+    int particle_density = data.value("particle_density", 8);
     int creation_rate = data.value("creation_rate", 1000);
+    float percent_limit = data.value("particle_percentage_limit", 0.3);
 
     user_fields fields;
     get_fields(&fields, data, log_file);
@@ -1161,8 +1277,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
     scalar_field *temp_p = scalar_field_copy(p, log_file);
 
     // Initializing the particles
-    particle_field *particles =
-        particle_field_init_2D("particles", nx * ny * density, log_file);
+    particle_field *particles = particle_field_init_2D(
+        "particles", nx * ny * particle_density, log_file);
     initialize_particles_pic(particles, dom, vx, vy, data["particle_density"],
                              log_file);
 
@@ -1173,6 +1289,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
     write_manifest_vtk(vy->name, dt, nt, sampling_rate, 1, 0, log_file);
     write_manifest_vtk(p->name, dt, nt, sampling_rate, 1, 0, log_file);
     write_manifest_vtk(div->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(dom->name, dt, nt, sampling_rate, 1, 0, log_file);
     for (int i = 0; i < fields.nb_fields; i++) {
         write_manifest_vtk(fields.fields[i]->name, dt, nt, sampling_rate, 1, 0,
                            log_file);
@@ -1185,6 +1302,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
     write_scalar_vtk(dom, 0, 0, log_file);
     for (int i = 0; i < fields.nb_fields; i++)
         write_scalar_vtk(fields.fields[i], 0, 0, log_file);
+
+    std::vector<int> density(nx * ny, 0);
 
     // Main time loop
     // bool inverted = false;
@@ -1232,6 +1351,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
             write_scalar_vtk(vy, i, 0, log_file);
             write_scalar_vtk(p, i, 0, log_file);
             write_scalar_vtk(div, i, 0, log_file);
+            write_scalar_vtk(dom, i, 0, log_file);
             for (int k = 0; k < fields.nb_fields; k++) {
                 write_scalar_vtk(fields.fields[k], i, 0, log_file);
             }
@@ -1240,9 +1360,11 @@ int solver_pic(json &data, std::ofstream &log_file) {
         }
 
         advect_pic(particles, vx, vy, dt, log_file);
-        std::vector<int> density(nx * ny, 0);
+        std::fill(density.begin(), density.end(), 0);
         update_particles_pic(particles, vx, vy, dom, creation_rate, dt, density,
                              log_file);
+        refill_domain(particles, dom, vx, vy, density, particle_density,
+                      percent_limit, dt, log_file);
 
         // advect
         // advect_pic_old(vx, vy, dt, vx, temp_vx, log_file);
