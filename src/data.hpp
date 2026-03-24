@@ -44,6 +44,7 @@ id: the ids of the particles, to identify them in paraview
 typedef struct _particle_field {
     std::string name;
     int N;
+    int next_id;
     std::vector<float> xyz; // soit 2D soit 3D, each particle's position aligned
     std::vector<float> velocity; // idem
     std::vector<int> id;

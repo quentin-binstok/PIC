@@ -70,6 +70,7 @@ particle_field *particle_field_init_2D(const std::string name, const int N,
 
     field->name = name;
     field->N = N;
+    field->next_id = N;
     field->xyz.resize(2 * N);
     field->velocity.resize(2 * N);
     field->id.resize(N);
@@ -88,6 +89,7 @@ particle_field *copy_particle_field(const particle_field *particles,
     particle_field *field = new particle_field;
     field->name = particles->name;
     field->N = particles->N;
+    field->next_id = particles->next_id;
     field->xyz.assign(particles->xyz.begin(), particles->xyz.end());
     field->velocity.assign(particles->velocity.begin(),
                            particles->velocity.end());
