@@ -1,7 +1,7 @@
 {
 	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 5,
+	"sampling_rate": 1,
 	"log_file": "log.txt",
 
 	"grid": [200, 200],
