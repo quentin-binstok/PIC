@@ -1,16 +1,19 @@
 {
 	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 1,
+	"sampling_rate": 5,
 	"log_file": "log.txt",
 
-	"grid": [200, 100],
+	"grid": [500, 500],
 	"space_steps": 0.1,
-	"nt": 150,
+	"nt": 1500,
 	"delta_t": 0.005,
-	"tol": 1e-3,
+	"tol": 1e-2,
 	"max_iter": 1e5,
 	"rho": 1000.0,
+
+	"gravity": true,
+	"g": 9.81,
 
 	"bc": [
 		{
@@ -20,11 +23,11 @@
 		},
 		{
 			"side": 1,
-			"type": 2.0
+			"type": 1.0
 		},
 		{
 			"side": 2,
-			"type": 1.0
+			"type": 2.0
 		},
 		{
 			"side": 3,
@@ -36,12 +39,48 @@
 		{
 			"center": [50, 50],
 			"radius": 10
+		},
+		{
+			"center": [100, 100],
+			"radius": 10
+		},
+		{
+			"center": [150, 50],
+			"radius": 10
+		},
+		{
+			"center": [200, 100],
+			"radius": 10
+		},
+		{
+			"center": [250, 50],
+			"radius": 10
+		},
+		{
+			"center": [300, 100],
+			"radius": 10
+		},
+		{
+			"center": [350, 50],
+			"radius": 10
+		},
+		{
+			"center": [400, 100],
+			"radius": 10
+		}
+	],
+
+	"ic_cell": [
+		{
+			"tl": [0, 150],
+			"br": [350, 499],
+			"value": 1.0
 		}
 	],
 
 	"particle_density": 20,
 	"creation_rate": 5000,
-	"particle_percentage_limit": 0.3,
+	"particle_percentage_limit": 0,
 
 	"fields": ["temperature"],
 

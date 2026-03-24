@@ -915,6 +915,12 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
     return EXIT_SUCCESS;
 }
 
+void apply_gravity(particle_field *particles, float g, float dt) {
+    for (int k = 0; k < particles->N; k++) {
+        particles->velocity[2 * k + 1] -= g * dt;
+    }
+}
+
 inline void initialize_particles_pic(particle_field *particles,
                                      scalar_field *dom, scalar_field *vx,
                                      scalar_field *vy, int density,
@@ -1106,10 +1112,15 @@ void refill_domain(particle_field *particles, scalar_field *dom,
         for (int i = 0; i < nx; i++) {
             float cell_type = GET(dom, i, j);
             int cell_density = density[j * nx + i];
+            bool solid_neighbour = false;
+            if (GET(dom, i + 1, j) == SOLID || GET(dom, i - 1, j) == SOLID ||
+                GET(dom, i, j + 1) == SOLID || GET(dom, i, j - 1) == SOLID)
+                solid_neighbour = true;
 
             if (cell_type == LIQUID) {
                 // 0.4 is arbitrary
-                if (cell_density >= percent_limit * particle_density) {
+                if (cell_density >= percent_limit * particle_density &&
+                    !solid_neighbour) {
                     int to_add = std::max(
                         0, (int)floor(particle_density - cell_density));
 
@@ -1243,6 +1254,9 @@ int solver_pic(json &data, std::ofstream &log_file) {
     int creation_rate = data.value("creation_rate", 1000);
     float percent_limit = data.value("particle_percentage_limit", 0.3);
 
+    bool gravity = data.value("gravity", false);
+    float g = data.value("g", 9.81);
+
     user_fields fields;
     get_fields(&fields, data, log_file);
 
@@ -1266,11 +1280,12 @@ int solver_pic(json &data, std::ofstream &log_file) {
     std::vector<float> speed_condition;
 
     // Applying the initial conditions
-    initialize_domain(dom, data, "ic_cell", log_file);
+
     create_circle(dom, "ic_cylinders", data, log_file);
     initialize_speed(vx, dom, data, "ic_vx", log_file);
     initialize_speed(vy, dom, data, "ic_vy", log_file);
     boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
+    initialize_domain(dom, data, "ic_cell", log_file);
 
     // scalar_field *temp_vx = scalar_field_copy(vx, log_file);
     // scalar_field *temp_vy = scalar_field_copy(vy, log_file);
@@ -1360,6 +1375,9 @@ int solver_pic(json &data, std::ofstream &log_file) {
         }
 
         advect_pic(particles, vx, vy, dt, log_file);
+        if (gravity)
+            apply_gravity(particles, g, dt);
+
         std::fill(density.begin(), density.end(), 0);
         update_particles_pic(particles, vx, vy, dom, creation_rate, dt, density,
                              log_file);

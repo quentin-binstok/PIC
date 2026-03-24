@@ -27,8 +27,8 @@ int initialize_domain(scalar_field *dom, json &data, std::string condition_name,
         int start_x = condition[k]["tl"][0], start_y = condition[k]["tl"][1];
         int end_x = condition[k]["br"][0], end_y = condition[k]["br"][1];
         // Checking that we're in the grid
-        if (start_x + 1 < 0 || start_y + 1 < 0 || end_x + 1 > nx - 1 ||
-            end_y + 1 > ny - 1) {
+        if (start_x + 1 < 0 || start_y + 1 < 0 || end_x > nx - 1 ||
+            end_y > ny - 1) {
             LOG_ERR(log_file, "Condition " << k << " in " << condition_name
                                            << " out of bounds");
             return EXIT_FAILURE;
@@ -36,8 +36,7 @@ int initialize_domain(scalar_field *dom, json &data, std::string condition_name,
         // Adding the condition to the grid
         for (int j = start_y; j <= end_y; j++) {
             for (int i = start_x; i <= end_x; i++) {
-                CELL_TYPE val = (CELL_TYPE)GET(dom, i, j);
-                SET(dom, i, j, value + val);
+                SET(dom, i, j, value);
             }
         }
     }
