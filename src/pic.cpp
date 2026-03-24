@@ -940,7 +940,7 @@ inline void initialize_particles_pic(particle_field *particles,
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
             float cell = GET(dom, i, j);
-            if (cell != SOLID) {
+            if (cell != SOLID && cell != AIR) {
                 for (int k = 0; k < density; k++) {
                     float x = i * dx + dist(gen);
                     float y = j * dx + dist(gen);

@@ -4,10 +4,10 @@
 	"sampling_rate": 5,
 	"log_file": "log.txt",
 
-	"grid": [500, 500],
+	"grid": [200, 200],
 	"space_steps": 0.1,
-	"nt": 1500,
-	"delta_t": 0.005,
+	"nt": 500,
+	"delta_t": 0.002,
 	"tol": 1e-2,
 	"max_iter": 1e5,
 	"rho": 1000.0,
@@ -18,8 +18,7 @@
 	"bc": [
 		{
 			"side": 0,
-			"type": 3.0,
-			"speed_x": 30.0
+			"type": 1.0
 		},
 		{
 			"side": 1,
@@ -35,52 +34,24 @@
 		}
 	],
 
-	"ic_cylinders": [
-		{
-			"center": [50, 50],
-			"radius": 10
-		},
-		{
-			"center": [100, 100],
-			"radius": 10
-		},
-		{
-			"center": [150, 50],
-			"radius": 10
-		},
-		{
-			"center": [200, 100],
-			"radius": 10
-		},
-		{
-			"center": [250, 50],
-			"radius": 10
-		},
-		{
-			"center": [300, 100],
-			"radius": 10
-		},
-		{
-			"center": [350, 50],
-			"radius": 10
-		},
-		{
-			"center": [400, 100],
-			"radius": 10
-		}
-	],
+	"ic_cylinders": [],
 
 	"ic_cell": [
 		{
-			"tl": [0, 150],
-			"br": [350, 499],
-			"value": 1.0
+			"tl": [1, 1],
+			"br": [198, 199],
+			"value": 2.0
+		},
+		{
+			"tl": [75, 75],
+			"br": [125, 125],
+			"value": 0.0
 		}
 	],
 
 	"particle_density": 20,
 	"creation_rate": 5000,
-	"particle_percentage_limit": 0,
+	"particle_percentage_limit": 0.0001,
 
 	"fields": ["temperature"],
 
