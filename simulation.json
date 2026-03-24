@@ -1,14 +1,14 @@
 {
 	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 5,
+	"sampling_rate": 10,
 	"log_file": "log.txt",
 
 	"grid": [200, 100],
 	"space_steps": 0.1,
-	"nt": 600,
+	"nt": 1500,
 	"delta_t": 0.005,
-	"tol": 1e-2,
+	"tol": 1e-3,
 	"max_iter": 1e5,
 	"rho": 1000.0,
 
@@ -16,7 +16,7 @@
 		{
 			"side": 0,
 			"type": 3.0,
-			"speed_x": 10.0
+			"speed_x": 30.0
 		},
 		{
 			"side": 1,
@@ -40,7 +40,7 @@
 	],
 
 	"particle_density": 8,
-	"creation_rate": 1200,
+	"creation_rate": 5000,
 
 	"fields": ["temperature"],
 

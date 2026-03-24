@@ -97,8 +97,9 @@ inline int get_speed(float *v_x, float *v_y, float x, float y, scalar_field *vx,
     float x0 = (x_1 + vx->x_internal) * dx;
     float y0 = (y_1 + vx->y_internal) * dx;
 
-    *v_x = interpolate_bilinear(x, y, x0, y0, GET(vx, x_1, y_1), GET(vx, x_2, y_1), GET(vx, x_1, y_2),
-                                GET(vx, x_2, y_2), dx, dx);
+    *v_x =
+        interpolate_bilinear(x, y, x0, y0, GET(vx, x_1, y_1), GET(vx, x_2, y_1),
+                             GET(vx, x_1, y_2), GET(vx, x_2, y_2), dx, dx);
 
     // vy
     *v_y = 0;
@@ -122,10 +123,41 @@ inline int get_speed(float *v_x, float *v_y, float x, float y, scalar_field *vx,
     x0 = (x_1 + vy->x_internal) * dx;
     y0 = (y_1 + vy->y_internal) * dx;
 
-    *v_y = interpolate_bilinear(x, y, x0, y0, GET(vy, x_1, y_1), GET(vy, x_2, y_1), GET(vy, x_1, y_2),
-                                GET(vy, x_2, y_2), dx, dx);
+    *v_y =
+        interpolate_bilinear(x, y, x0, y0, GET(vy, x_1, y_1), GET(vy, x_2, y_1),
+                             GET(vy, x_1, y_2), GET(vy, x_2, y_2), dx, dx);
 
     return EXIT_SUCCESS;
+}
+
+inline void advect_single_particle(float *x, float *y, scalar_field *vx,
+                                   scalar_field *vy, float dt,
+                                   std::ofstream &log_file) {
+
+    // Three-stage third-order RK scheme
+    float init_x = *x;
+    float init_y = *y;
+
+    float k_1x, k_1y;
+    get_speed(&k_1x, &k_1y, init_x, init_y, vx, vy, log_file);
+
+    float x2 = init_x + 0.5 * dt * k_1x;
+    float y2 = init_y + 0.5 * dt * k_1y;
+    float k_2x, k_2y;
+    get_speed(&k_2x, &k_2y, x2, y2, vx, vy, log_file);
+
+    float x3 = init_x + 0.75 * dt * k_2x;
+    float y3 = init_y + 0.75 * dt * k_2y;
+    float k_3x, k_3y;
+    get_speed(&k_3x, &k_3y, x3, y3, vx, vy, log_file);
+
+    float x_new = init_x + (2.0f / 9.0f) * dt * k_1x +
+                  (3.0f / 9.0f) * dt * k_2x + (4.0f / 9.0f) * dt * k_3x;
+    float y_new = init_y + (2.0f / 9.0f) * dt * k_1y +
+                  (3.0f / 9.0f) * dt * k_2y + (4.0f / 9.0f) * dt * k_3y;
+
+    *x = x_new;
+    *y = y_new;
 }
 
 /*
@@ -338,6 +370,7 @@ inline int divergence_pic(scalar_field *vx, scalar_field *vy, scalar_field *div,
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
+
             float dudx = 0.0f;
             float dvdy = 0.0f;
             if (i != 0)
@@ -797,7 +830,7 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
     int vx_ny = vx->ny;
     int vy_nx = vy->nx;
     int vy_ny = vy->ny;
-    int smooth = 0;
+    int smooth = -1;
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < vx_ny; j++) {
         for (int i = 0; i < vx_nx; i++) {
@@ -806,10 +839,11 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                 continue;
             }
             if (GET(dom, i, j) == DIRICHLET) {
+                SET(vx, i, j, 0);
                 if (i == 0) {
                     float v = speed_condition[0];
                     if (j < smooth)
-                        v *= (float)j / smooth;
+                        v *= (float)(j) / smooth;
                     if (j > vx_ny - smooth)
                         v *= (float)(vx_ny - j - 1) / smooth;
                     SET(vx, i, j, v);
@@ -844,6 +878,7 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                 continue;
             }
             if (GET(dom, i, j) == DIRICHLET) {
+                SET(vy, i, j, 0);
                 if (j == 0) {
                     float v = speed_condition[3];
                     if (i < smooth)
@@ -918,7 +953,7 @@ inline void initialize_particles_pic(particle_field *particles,
 
     // After the loop:
     particles->N = current_id;
-    particles->next_id = current_id;  // next to assign = current_id
+    particles->next_id = current_id; // next to assign = current_id
     particles->xyz.resize(2 * current_id);
     particles->velocity.resize(2 * current_id);
 
@@ -932,11 +967,12 @@ void remove_particle(particle_field *particles, int p) {
 
     // Early exit if removing the last particle (no swap needed)
     if (p != last) {
-        std::swap(particles->xyz[2 * p],     particles->xyz[2 * last]);
+        std::swap(particles->xyz[2 * p], particles->xyz[2 * last]);
         std::swap(particles->xyz[2 * p + 1], particles->xyz[2 * last + 1]);
 
-        std::swap(particles->velocity[2 * p],     particles->velocity[2 * last]);
-        std::swap(particles->velocity[2 * p + 1], particles->velocity[2 * last + 1]);
+        std::swap(particles->velocity[2 * p], particles->velocity[2 * last]);
+        std::swap(particles->velocity[2 * p + 1],
+                  particles->velocity[2 * last + 1]);
 
         std::swap(particles->id[p], particles->id[last]);
     }
@@ -951,7 +987,8 @@ void remove_particle(particle_field *particles, int p) {
 }
 
 inline int update_particles_pic(particle_field *particles, scalar_field *vx,
-                                scalar_field *vy, scalar_field *dom, int creation_rate, float dt,
+                                scalar_field *vy, scalar_field *dom,
+                                int creation_rate, float dt,
                                 std::vector<int> &density,
                                 std::ofstream &log_file) {
     LOG_INFO(log_file, "Updating particles")
@@ -1003,8 +1040,8 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
 
             if (cell == DIRICHLET) {
                 float n = dt * creation_rate;
-                float frac = n - floor(n);
-                int to_add = (int)floor(n) + (prob(gen) < frac ? 1 : 0);
+                // float frac = n - floor(n);
+                int to_add = (int)floor(n); // + (prob(gen) < frac ? 1 : 0);
 
                 for (int k = 0; k < to_add; k++) {
 
@@ -1017,15 +1054,14 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
 
                     float tau = birth_dist(gen);
                     float remaining = dt - tau;
-                    x += vx_p * remaining;
-                    y += vy_p * remaining;
+                    advect_single_particle(&x, &y, vx, vy, remaining, log_file);
 
                     int fi = (int)floor(x / dx + 0.5f);
                     int fj = (int)floor(y / dx + 0.5f);
 
-                    if (fi < 0 || fj < 0 || fi >= nx || fj >= ny){
+                    if (fi < 0 || fj < 0 || fi >= nx || fj >= ny) {
                         continue;
-                    } else if (GET(dom, fi, fj) == SOLID){
+                    } else if (GET(dom, fi, fj) == SOLID) {
                         continue;
                     } else {
                         particles->xyz.push_back(x);
@@ -1039,7 +1075,6 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
                         particles->N++;
 
                         density[fj * nx + fi]++;
-
                     }
                 }
             }
@@ -1206,7 +1241,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
 
         advect_pic(particles, vx, vy, dt, log_file);
         std::vector<int> density(nx * ny, 0);
-        update_particles_pic(particles, vx, vy, dom, creation_rate, dt, density, log_file);
+        update_particles_pic(particles, vx, vy, dom, creation_rate, dt, density,
+                             log_file);
 
         // advect
         // advect_pic_old(vx, vy, dt, vx, temp_vx, log_file);
