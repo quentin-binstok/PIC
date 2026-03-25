@@ -228,34 +228,71 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
         }
     }
 
-#pragma omp parallel for
+    // #pragma omp parallel for
+    //     for (int k = 0; k < particles->N; k++) {
+    //         float x = particles->xyz[2 * k];
+    //         float y = particles->xyz[2 * k + 1];
+    //         float u = particles->velocity[2 * k];
+    //         float v = particles->velocity[2 * k + 1];
+    //         int i_p = std::max(0, (int)(x / dx));
+    //         int i_end = std::min(nx, i_p + 2);
+    //         int j_p = std::max(0, (int)(y / dx));
+    //         int j_end = std::min(ny, j_p + 2);
+
+    //         for (int j = j_p; j < j_end; j++) {
+    //             for (int i = i_p; i < i_end; i++) {
+    //                 float dist_x = x - i * dx;
+    //                 float dist_y = y - j * dx;
+    //                 float kern_x =
+    //                     kernel((dist_x - 0.5 * dx) / dx) * kernel(dist_y /
+    //                     dx);
+    //                 float kern_y =
+    //                     kernel(dist_x / dx) * kernel((dist_y - 0.5 * dx) /
+    //                     dx);
+
+    // #pragma omp atomic
+    //                 vx->values[j * vx->nx + i] += u * kern_x;
+    // #pragma omp atomic
+    //                 vy->values[j * vy->nx + i] += v * kern_y;
+    // #pragma omp atomic
+    //                 kern_sum_vx->values[j * kern_sum_vx->nx + i] += kern_x;
+    // #pragma omp atomic
+    //                 kern_sum_vy->values[j * kern_sum_vy->nx + i] += kern_y;
+    //             }
+    //         }
+    //     }
+
     for (int k = 0; k < particles->N; k++) {
         float x = particles->xyz[2 * k];
         float y = particles->xyz[2 * k + 1];
         float u = particles->velocity[2 * k];
         float v = particles->velocity[2 * k + 1];
-        int i_p = std::max(0, (int)(x / dx));
-        int i_end = std::min(nx, i_p + 2);
-        int j_p = std::max(0, (int)(y / dx));
-        int j_end = std::min(ny, j_p + 2);
 
-        for (int j = j_p; j < j_end; j++) {
-            for (int i = i_p; i < i_end; i++) {
-                float dist_x = x - i * dx;
-                float dist_y = y - j * dx;
-                float kern_x =
-                    kernel((dist_x - 0.5 * dx) / dx) * kernel(dist_y / dx);
-                float kern_y =
-                    kernel(dist_x / dx) * kernel((dist_y - 0.5 * dx) / dx);
+        // --- vx stencil: staggered in x, collocated in y ---
+        int i_vx = std::max(0, (int)(x / dx - 0.5)); // matches get_speed
+        int j_vx = std::max(0, (int)(y / dx));
+        for (int j = j_vx; j < std::min(ny, j_vx + 2); j++) {
+            for (int i = i_vx; i < std::min(nx, i_vx + 2); i++) {
+                float kern = kernel((x - i * dx - 0.5f * dx) / dx) *
+                             kernel((y - j * dx) / dx);
+#pragma omp atomic
+                vx->values[j * nx + i] += u * kern;
+#pragma omp atomic
+                kern_sum_vx->values[j * nx + i] += kern;
+            }
+        }
 
+        // --- vy stencil: collocated in x, staggered in y ---
+        int i_vy = std::max(0, (int)(x / dx));
+        int j_vy = std::max(0, (int)(y / dx - 0.5)); // matches get_speed
+        for (int j = j_vy; j < std::min(ny, j_vy + 2); j++) {
+            for (int i = i_vy; i < std::min(nx, i_vy + 2); i++) {
+                float kern = kernel((x - i * dx) / dx) *
+                             kernel((y - j * dx - 0.5f * dx) / dx);
 #pragma omp atomic
-                vx->values[j * vx->nx + i] += u * kern_x;
+                vy->values[j * nx + i] += v * kern;
 #pragma omp atomic
-                vy->values[j * vy->nx + i] += v * kern_y;
-#pragma omp atomic
-                kern_sum_vx->values[j * kern_sum_vx->nx + i] += kern_x;
-#pragma omp atomic
-                kern_sum_vy->values[j * kern_sum_vy->nx + i] += kern_y;
+                kern_sum_vy->values[j * nx + i] += kern;
             }
         }
     }
@@ -737,6 +774,8 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
                         int l = GET(dom, i - 1, j);
                         if (l == SOLID) {
                             p_left = GET(p, i, j) - beta * GET(vx, i - 1, j);
+                        } else if (l == AIR) {
+                            p_left = 0;
                         } else {
                             p_left = GET(p, i - 1, j);
                         }
@@ -748,6 +787,8 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
                         int r = GET(dom, i + 1, j);
                         if (r == SOLID) {
                             p_right = GET(p, i, j) + beta * GET(vx, i, j);
+                        } else if (r == AIR) {
+                            p_right = 0;
                         } else {
                             p_right = GET(p, i + 1, j);
                         }
@@ -759,6 +800,8 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
                         int d = GET(dom, i, j - 1);
                         if (d == SOLID) {
                             p_down = GET(p, i, j) - beta * GET(vy, i, j - 1);
+                        } else if (d == AIR) {
+                            p_down = 0;
                         } else {
                             p_down = GET(p, i, j - 1);
                         }
@@ -770,6 +813,8 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
                         int u = GET(dom, i, j + 1);
                         if (u == SOLID) {
                             p_up = GET(p, i, j) + beta * GET(vy, i, j);
+                        } else if (u == AIR) {
+                            p_up = 0;
                         } else {
                             p_up = GET(p, i, j + 1);
                         }
@@ -913,7 +958,12 @@ void apply_gravity(scalar_field *vy, scalar_field *dom, float g, float dt) {
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
             float cell_type = GET(dom, i, j);
-            if (cell_type == LIQUID) {
+            float cell_upper;
+            if (j != ny - 1)
+                cell_upper = GET(dom, i, j + 1);
+            else
+                cell_upper = SOLID;
+            if (cell_type == LIQUID || cell_upper == LIQUID) {
                 float init_vy = GET(vy, i, j);
                 SET(vy, i, j, init_vy - g * dt);
             }
@@ -1117,6 +1167,7 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
 void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
                scalar_field *vy, scalar_field *dom, int imposed_density,
                std::vector<int> density, float dt, std::ofstream &log_file) {
+    // LOG_INFO(log_file, "Filling cell " << i << " " << j);
     int nx = vx->nx, ny = vx->ny;
     float dx = vx->dx;
 
@@ -1163,17 +1214,16 @@ void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
             density[fj * nx + fi]++;
         }
     }
+    // LOG_INFO(log_file, "Ended filling cell");
 }
 
 void refill_domain(particle_field *particles, scalar_field *dom,
                    scalar_field *vx, scalar_field *vy,
                    std::vector<int> &density, int particle_density,
                    float percent_limit, float dt, std::ofstream &log_file) {
+    LOG_INFO(log_file, "Refilling domain");
     int nx = dom->nx, ny = dom->ny;
     float dx = dom->dx;
-
-    int target = particle_density;
-    particle_density = 0;
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -1192,32 +1242,32 @@ void refill_domain(particle_field *particles, scalar_field *dom,
 
             if (cell_type == LIQUID) {
                 // 0.4 is arbitrary
-                if (cell_density >= percent_limit * target &&
+                if (cell_density >= percent_limit * particle_density &&
                     !solid_neighbour) {
                     fill_cell(i, j, particles, vx, vy, dom, particle_density,
                               density, dt, log_file);
                 }
                 // change to air
-                else {
+                else if (cell_density < 1) {
                     SET(dom, i, j, AIR);
                 }
             } else if (cell_type == AIR && i != 0 && i != nx - 1 && j != 0 &&
                        j != ny - 1) {
-                if (cell_density >= percent_limit * target) {
+                if (cell_density > 0) {
                     SET(dom, i, j, LIQUID);
                 }
             }
-            float up_cell = GET(dom, i, j + 1);
-            float down_cell = GET(dom, i, j - 1);
-            float right_cell = GET(dom, i + 1, j);
-            float left_cell = GET(dom, i - 1, j);
-            if (up_cell == LIQUID && down_cell == LIQUID &&
-                right_cell == LIQUID && left_cell == LIQUID) {
-                SET(dom, i, j, LIQUID);
+            // float up_cell = GET(dom, i, j + 1);
+            // float down_cell = GET(dom, i, j - 1);
+            // float right_cell = GET(dom, i + 1, j);
+            // float left_cell = GET(dom, i - 1, j);
+            // if (up_cell == LIQUID && down_cell == LIQUID &&
+            //     right_cell == LIQUID && left_cell == LIQUID) {
+            //     SET(dom, i, j, LIQUID);
 
-                fill_cell(i, j, particles, vx, vy, dom, particle_density,
-                          density, dt, log_file);
-            }
+            //     fill_cell(i, j, particles, vx, vy, dom, particle_density,
+            //               density, dt, log_file);
+            // }
         }
     }
 }

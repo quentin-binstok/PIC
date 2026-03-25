@@ -4,7 +4,7 @@
 	"sampling_rate": 1,
 	"log_file": "log.txt",
 
-	"grid": [400, 500],
+	"grid": [200, 200],
 	"space_steps": 0.1,
 	"nt": 1500,
 	"delta_t": 0.002,
@@ -39,19 +39,19 @@
 	"ic_cell": [
 		{
 			"tl": [1, 1],
-			"br": [398, 499],
+			"br": [198, 199],
 			"value": 2.0
 		},
 		{
-			"tl": [200, 300],
-			"br": [300, 400],
+			"tl": [1, 1],
+			"br": [50, 190],
 			"value": 0.0
 		}
 	],
 
 	"particle_density": 20,
 	"creation_rate": 5000,
-	"particle_percentage_limit": 0.7,
+	"particle_percentage_limit": 1.1,
 
 	"fields": ["temperature"],
 
