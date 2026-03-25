@@ -1,12 +1,12 @@
 {
 	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 1,
+	"sampling_rate": 10,
 	"log_file": "log.txt",
 
-	"grid": [200, 200],
+	"grid": [200, 500],
 	"space_steps": 0.1,
-	"nt": 1500,
+	"nt": 5000,
 	"delta_t": 0.002,
 	"tol": 1e-2,
 	"max_iter": 1e5,
@@ -39,12 +39,12 @@
 	"ic_cell": [
 		{
 			"tl": [1, 1],
-			"br": [198, 199],
+			"br": [198, 499],
 			"value": 2.0
 		},
 		{
 			"tl": [1, 1],
-			"br": [50, 190],
+			"br": [50, 200],
 			"value": 0.0
 		}
 	],

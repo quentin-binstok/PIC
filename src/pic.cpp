@@ -949,6 +949,21 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
             SET(vy, i, j, GET(vy, i, j) - dt * gradp_y / rho);
         }
     }
+
+    // After the P2G normalization loop, add:
+
+    // Free-slip on left/right walls: ∂vy/∂x = 0
+    for (int j = 0; j < vy_ny; j++) {
+        SET(vy, 0, j, GET(vy, 1, j));                 // left wall
+        SET(vy, vy_nx - 1, j, GET(vy, vy_nx - 2, j)); // right wall
+    }
+
+    // Symmetrically, for vx on horizontal walls: ∂vx/∂y = 0
+    for (int i = 0; i < vx_nx; i++) {
+        SET(vx, i, 0, GET(vx, i, 1));                 // bottom wall
+        SET(vx, i, vx_ny - 1, GET(vx, i, vx_ny - 2)); // top wall
+    }
+
     return EXIT_SUCCESS;
 }
 
