@@ -1263,8 +1263,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
         max_iter = data["max_iter"];
 
     int particle_density = data.value("particle_density", 8);
-    int creation_rate = data.value("creation_rate", 1000);
-    float percent_limit = data.value("particle_percentage_limit", 0.3);
+    int creation_rate = data.value("creation_rate", 1000);/* 
+    float percent_limit = data.value("particle_percentage_limit", 0.3); */
 
     bool gravity = data.value("gravity", false);
     float g = data.value("g", 9.81);
@@ -1394,8 +1394,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
         std::fill(density.begin(), density.end(), 0);
         update_particles_pic(particles, vx, vy, dom, creation_rate, dt, density,
                              log_file);
-        refill_domain(particles, dom, vx, vy, density, particle_density,
-                      percent_limit, dt, log_file);
+        /* refill_domain(particles, dom, vx, vy, density, particle_density,
+                      percent_limit, dt, log_file); */
 
         // advect
         // advect_pic_old(vx, vy, dt, vx, temp_vx, log_file);
