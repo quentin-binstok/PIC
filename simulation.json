@@ -1,13 +1,14 @@
 {
 	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 5,
+	"sampling_rate": 10,
 	"log_file": "log.txt",
+	"flip": 0.95,
 
-	"grid": [200, 100],
-	"space_steps": 0.1,
-	"nt": 1000,
-	"delta_t": 0.002,
+	"grid": [200, 200],
+	"space_steps": 5e-3,
+	"nt": 10000,
+	"delta_t": 0.001,
 	"tol": 1e-2,
 	"max_iter": 1e5,
 	"rho": 1000.0,
@@ -35,16 +36,24 @@
 		}
 	],
 
-	"ic_cylinders": [
+	"ic_cylinders": [],
+
+	"ic_cell": [
 		{
-			"center": [50, 50],
-			"radius": 10
+			"tl": [1, 1],
+			"br": [198, 199],
+			"value": 2.0
+		},
+		{
+			"tl": [1, 1],
+			"br": [100, 100],
+			"value": 0.0
 		}
 	],
 
-	"particle_density": 20,
+	"particle_density": 25,
 	"creation_rate": 5000,
-	"particle_percentage_limit": 1,
+	"particle_percentage_limit": 1.1,
 
 	"fields": ["temperature"],
 
