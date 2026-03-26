@@ -215,8 +215,6 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
     LOG_INFO(log_file, "Transferring the speed of particles to the grid");
 
     int nx = vy->nx, ny = vx->ny;
-    // int S = nx * ny;
-    // float W = (float)particles->N / (float)S;
     float dx = vx->dx;
 
 #pragma omp parallel for collapse(2)
@@ -1312,7 +1310,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
     int particle_density = data.value("particle_density", 8);
     int creation_rate = data.value("creation_rate", 1000);
     float percent_limit = data.value("particle_percentage_limit", 0.3);
-    float flip_param = data.value("flip", 0);
+    float flip_param = data.value("flip", 0.0f);
+    LOG_INFO(log_file, "FLIP percentage is " << flip_param * 100);
 
     bool gravity = data.value("gravity", false);
     float g = data.value("g", 9.81);

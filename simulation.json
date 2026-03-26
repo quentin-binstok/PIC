@@ -3,7 +3,7 @@
 	"iteration_algo": "SOR",
 	"sampling_rate": 10,
 	"log_file": "log.txt",
-	"flip": 1.0,
+	"flip": 0.95,
 
 	"grid": [200, 200],
 	"space_steps": 5e-3,
