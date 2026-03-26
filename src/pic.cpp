@@ -1387,11 +1387,11 @@ int solver_pic(json &data, std::ofstream &log_file) {
         log_file << "\n";
         LOG_INFO(log_file, "Starting time loop " << i << " out of " << nt);
 
-        particles_speed_to_grid(particles, vx, vy, kern_sum_vx, kern_sum_vy,
-                                log_file);
-
         if (gravity)
             apply_gravity(particles, g, dt);
+
+        particles_speed_to_grid(particles, vx, vy, kern_sum_vx, kern_sum_vy,
+                                log_file);
 
         divergence_pic(vx, vy, div, dom, speed_condition, log_file);
 
