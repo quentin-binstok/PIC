@@ -3,13 +3,13 @@
 	"iteration_algo": "SOR",
 	"sampling_rate": 10,
 	"log_file": "log.txt",
-	"flip": 0.0,
+	"flip": 1.0,
 
 	"grid": [200, 200],
 	"space_steps": 5e-3,
 	"nt": 10000,
 	"delta_t": 0.001,
-	"tol": 5e-2,
+	"tol": 1e-2,
 	"max_iter": 1e5,
 	"rho": 1000.0,
 

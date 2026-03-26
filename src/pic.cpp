@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <random>
 
@@ -228,40 +229,6 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
         }
     }
 
-    // #pragma omp parallel for
-    //     for (int k = 0; k < particles->N; k++) {
-    //         float x = particles->xyz[2 * k];
-    //         float y = particles->xyz[2 * k + 1];
-    //         float u = particles->velocity[2 * k];
-    //         float v = particles->velocity[2 * k + 1];
-    //         int i_p = std::max(0, (int)(x / dx));
-    //         int i_end = std::min(nx, i_p + 2);
-    //         int j_p = std::max(0, (int)(y / dx));
-    //         int j_end = std::min(ny, j_p + 2);
-
-    //         for (int j = j_p; j < j_end; j++) {
-    //             for (int i = i_p; i < i_end; i++) {
-    //                 float dist_x = x - i * dx;
-    //                 float dist_y = y - j * dx;
-    //                 float kern_x =
-    //                     kernel((dist_x - 0.5 * dx) / dx) * kernel(dist_y /
-    //                     dx);
-    //                 float kern_y =
-    //                     kernel(dist_x / dx) * kernel((dist_y - 0.5 * dx) /
-    //                     dx);
-
-    // #pragma omp atomic
-    //                 vx->values[j * vx->nx + i] += u * kern_x;
-    // #pragma omp atomic
-    //                 vy->values[j * vy->nx + i] += v * kern_y;
-    // #pragma omp atomic
-    //                 kern_sum_vx->values[j * kern_sum_vx->nx + i] += kern_x;
-    // #pragma omp atomic
-    //                 kern_sum_vy->values[j * kern_sum_vy->nx + i] += kern_y;
-    //             }
-    //         }
-    //     }
-
     for (int k = 0; k < particles->N; k++) {
         float x = particles->xyz[2 * k];
         float y = particles->xyz[2 * k + 1];
@@ -271,6 +238,7 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
         // --- vx stencil: staggered in x, collocated in y ---
         int i_vx = std::max(0, (int)(x / dx - 0.5)); // matches get_speed
         int j_vx = std::max(0, (int)(y / dx));
+#pragma omp parallel for collapse(2)
         for (int j = j_vx; j < std::min(ny, j_vx + 2); j++) {
             for (int i = i_vx; i < std::min(nx, i_vx + 2); i++) {
                 float kern = kernel((x - i * dx - 0.5f * dx) / dx) *
@@ -285,6 +253,7 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
         // --- vy stencil: collocated in x, staggered in y ---
         int i_vy = std::max(0, (int)(x / dx));
         int j_vy = std::max(0, (int)(y / dx - 0.5)); // matches get_speed
+#pragma omp parallel for collapse(2)
         for (int j = j_vy; j < std::min(ny, j_vy + 2); j++) {
             for (int i = i_vy; i < std::min(nx, i_vy + 2); i++) {
                 float kern = kernel((x - i * dx) / dx) *
@@ -314,22 +283,25 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
 }
 
 inline int grid_speed_to_particles(particle_field *particles, scalar_field *vx,
-                                   scalar_field *vy, float flip_param,
+                                   scalar_field *vy, scalar_field *vx_old,
+                                   scalar_field *vy_old, float flip_param,
                                    std::ofstream &log_file) {
 
+#pragma omp parallel for
     for (int k = 0; k < particles->N; k++) {
         float x = particles->xyz[2 * k];
         float y = particles->xyz[2 * k + 1];
 
-        float v_x, v_y;
+        float v_x, v_y, v_x_old, v_y_old;
         get_speed(&v_x, &v_y, x, y, vx, vy, log_file);
+        get_speed(&v_x_old, &v_y_old, x, y, vx_old, vy_old, log_file);
 
         particles->velocity[2 * k] =
             (1 - flip_param) * v_x +
-            flip_param * (v_x - particles->velocity[2 * k]);
+            flip_param * (particles->velocity[2 * k] + v_x - v_x_old);
         particles->velocity[2 * k + 1] =
             (1 - flip_param) * v_y +
-            flip_param * (v_y - particles->velocity[2 * k + 1]);
+            flip_param * (particles->velocity[2 * k + 1] + v_y - v_y_old);
     }
 
     return EXIT_SUCCESS;
@@ -972,22 +944,28 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
     return EXIT_SUCCESS;
 }
 
-void apply_gravity(scalar_field *vy, scalar_field *dom, float g, float dt) {
-    int nx = dom->nx, ny = dom->ny;
+void apply_gravity(particle_field *particles, float g, float dt) {
+    //     int nx = dom->nx, ny = dom->ny;
 
-    for (int j = 0; j < ny; j++) {
-        for (int i = 0; i < nx; i++) {
-            float cell_type = GET(dom, i, j);
-            float cell_upper;
-            if (j != ny - 1)
-                cell_upper = GET(dom, i, j + 1);
-            else
-                cell_upper = SOLID;
-            if (cell_type == LIQUID || cell_upper == LIQUID) {
-                float init_vy = GET(vy, i, j);
-                SET(vy, i, j, init_vy - g * dt);
-            }
-        }
+    // #pragma omp parallel for collapse(2)
+    //     for (int j = 0; j < ny; j++) {
+    //         for (int i = 0; i < nx; i++) {
+    //             float cell_type = GET(dom, i, j);
+    //             float cell_upper;
+    //             if (j != ny - 1)
+    //                 cell_upper = GET(dom, i, j + 1);
+    //             else
+    //                 cell_upper = SOLID;
+    //             if (cell_type == LIQUID || cell_upper == LIQUID) {
+    //                 float init_vy = GET(vy, i, j);
+    //                 SET(vy, i, j, init_vy - g * dt);
+    //             }
+    //         }
+    //     }
+
+#pragma omp parallel for
+    for (int k = 0; k < particles->N; k++) {
+        particles->velocity[2 * k + 1] -= g * dt;
     }
 }
 
@@ -1261,7 +1239,6 @@ void refill_domain(particle_field *particles, scalar_field *dom,
                 solid_neighbour = true;
 
             if (cell_type == LIQUID) {
-                // 0.4 is arbitrary
                 if (cell_density >= percent_limit * particle_density &&
                     !solid_neighbour) {
                     fill_cell(i, j, particles, vx, vy, dom, particle_density,
@@ -1370,8 +1347,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
     boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
     initialize_domain(dom, data, "ic_cell", log_file);
 
-    // scalar_field *temp_vx = scalar_field_copy(vx, log_file);
-    // scalar_field *temp_vy = scalar_field_copy(vy, log_file);
+    scalar_field *temp_vx = scalar_field_copy(vx, log_file);
+    scalar_field *temp_vy = scalar_field_copy(vy, log_file);
     scalar_field *temp_p = scalar_field_copy(p, log_file);
 
     // Initializing the particles
@@ -1414,7 +1391,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
                                 log_file);
 
         if (gravity)
-            apply_gravity(vy, dom, g, dt);
+            apply_gravity(particles, g, dt);
 
         divergence_pic(vx, vy, div, dom, speed_condition, log_file);
 
@@ -1437,6 +1414,9 @@ int solver_pic(json &data, std::ofstream &log_file) {
             return EXIT_FAILURE;
         }
 
+        std::memcpy(temp_vx->values, vx->values, nx * ny * sizeof(float));
+        std::memcpy(temp_vy->values, vy->values, nx * ny * sizeof(float));
+
         project_velocity_pic(p, vx, vy, dom, dx, dt, rho, log_file,
                              speed_condition);
 
@@ -1444,7 +1424,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
         // algorithm
         divergence_pic(vx, vy, div, dom, speed_condition, log_file);
 
-        grid_speed_to_particles(particles, vx, vy, flip_param, log_file);
+        grid_speed_to_particles(particles, vx, vy, temp_vx, temp_vy, flip_param,
+                                log_file);
 
         // save files, when the divergence is zero
         if (sampling_rate && !(i % sampling_rate)) {
@@ -1467,10 +1448,6 @@ int solver_pic(json &data, std::ofstream &log_file) {
                              log_file);
         refill_domain(particles, dom, vx, vy, density, particle_density,
                       percent_limit, dt, log_file);
-
-        // advect
-        // advect_pic_old(vx, vy, dt, vx, temp_vx, log_file);
-        // advect_pic_old(vx, vy, dt, vy, temp_vy, log_file);
 
         for (int k = 0; k < fields.nb_fields; k++) {
             scalar_field *tmp = scalar_field_copy(fields.fields[k], log_file);
