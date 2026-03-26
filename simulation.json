@@ -3,12 +3,13 @@
 	"iteration_algo": "SOR",
 	"sampling_rate": 10,
 	"log_file": "log.txt",
+	"flip": 0.0,
 
-	"grid": [200, 500],
-	"space_steps": 0.1,
-	"nt": 5000,
-	"delta_t": 0.002,
-	"tol": 1e-2,
+	"grid": [200, 200],
+	"space_steps": 5e-3,
+	"nt": 10000,
+	"delta_t": 0.001,
+	"tol": 5e-2,
 	"max_iter": 1e5,
 	"rho": 1000.0,
 
@@ -39,17 +40,17 @@
 	"ic_cell": [
 		{
 			"tl": [1, 1],
-			"br": [198, 499],
+			"br": [198, 199],
 			"value": 2.0
 		},
 		{
 			"tl": [1, 1],
-			"br": [50, 200],
+			"br": [100, 100],
 			"value": 0.0
 		}
 	],
 
-	"particle_density": 20,
+	"particle_density": 25,
 	"creation_rate": 5000,
 	"particle_percentage_limit": 1.1,
 

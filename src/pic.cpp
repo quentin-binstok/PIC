@@ -314,7 +314,8 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
 }
 
 inline int grid_speed_to_particles(particle_field *particles, scalar_field *vx,
-                                   scalar_field *vy, std::ofstream &log_file) {
+                                   scalar_field *vy, float flip_param,
+                                   std::ofstream &log_file) {
 
     for (int k = 0; k < particles->N; k++) {
         float x = particles->xyz[2 * k];
@@ -323,8 +324,12 @@ inline int grid_speed_to_particles(particle_field *particles, scalar_field *vx,
         float v_x, v_y;
         get_speed(&v_x, &v_y, x, y, vx, vy, log_file);
 
-        particles->velocity[2 * k] = v_x;
-        particles->velocity[2 * k + 1] = v_y;
+        particles->velocity[2 * k] =
+            (1 - flip_param) * v_x +
+            flip_param * (v_x - particles->velocity[2 * k]);
+        particles->velocity[2 * k + 1] =
+            (1 - flip_param) * v_y +
+            flip_param * (v_y - particles->velocity[2 * k + 1]);
     }
 
     return EXIT_SUCCESS;
@@ -1330,6 +1335,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
     int particle_density = data.value("particle_density", 8);
     int creation_rate = data.value("creation_rate", 1000);
     float percent_limit = data.value("particle_percentage_limit", 0.3);
+    float flip_param = data.value("flip", 0);
 
     bool gravity = data.value("gravity", false);
     float g = data.value("g", 9.81);
@@ -1438,7 +1444,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
         // algorithm
         divergence_pic(vx, vy, div, dom, speed_condition, log_file);
 
-        grid_speed_to_particles(particles, vx, vy, log_file);
+        grid_speed_to_particles(particles, vx, vy, flip_param, log_file);
 
         // save files, when the divergence is zero
         if (sampling_rate && !(i % sampling_rate)) {
