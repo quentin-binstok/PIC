@@ -133,3 +133,70 @@ The objects are to be as:
 ```
 
 The possible values can be either `0` or `1`, the former referring to liquid, and the latter to solid. Other values will for now cause an undefined behaviour.
+
+### `ic_cylinders`
+
+- Type: array of objects
+- Role: defines the cylinders present in the domain
+- Default: no cylinders present
+
+This parameter allows to define cylinders of solid in the domain.
+
+The objects are to be as:
+
+```json
+{
+	"center": [20, 50],
+	"radius": 10
+}
+```
+
+## User-defined fields
+
+It is possible to define arbitrary fields, that fill be advected by the solver. To do this, two things must be done: the list of such fields must be provided, and their initial conditions must be given.
+
+The list of fields must be provided with a parameter `"fields"`, which must be an array of strings. Each string must be the name of a field. For example, one might have:
+
+```json
+"fields": ["temperature", "concentration"]
+```
+
+Afterwards, the initial conditions of the fields must be provided. To do this, add a parameter that is the name of the field, which must be an array of objects. The objects must be as follows:
+
+```json
+{
+	"tl": [20, 20],
+	"br": [50, 50],
+	"value": 4.5
+}
+```
+
+For example, one might have
+
+```json
+"temperature": [
+	{
+		"tl": [200, 235],
+		"br": [230, 265],
+		"value": 5.0
+	},
+	{
+		"tl": [50, 235],
+		"br": [90, 265],
+		"value": 5.0
+	},
+	{
+		"tl": [235, 400],
+		"br": [265, 450],
+		"value": 5.0
+	}
+],
+
+"concentration": [
+	{
+		"tl": [30, 235],
+		"br": [80, 265],
+		"value": 10.0
+	}
+]
+```
