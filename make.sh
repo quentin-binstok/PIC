@@ -5,6 +5,7 @@ build_dir="build"
 data_dir="data"
 
 rm -r $data_dir/*
+rm *.pvd
 
 if [[ $1 == "clean" || $1 == "clean_build" ]]; then
     rm -r $build_dir 

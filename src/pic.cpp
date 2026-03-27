@@ -217,7 +217,6 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
     int nx = vy->nx, ny = vx->ny;
     float dx = vx->dx;
 
-#pragma omp parallel for collapse(2)
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
             SET(vx, i, j, 0);
@@ -227,6 +226,7 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
         }
     }
 
+#pragma omp parallel for
     for (int k = 0; k < particles->N; k++) {
         float x = particles->xyz[2 * k];
         float y = particles->xyz[2 * k + 1];
@@ -236,7 +236,6 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
         // --- vx stencil: staggered in x, collocated in y ---
         int i_vx = std::max(0, (int)(x / dx - 0.5)); // matches get_speed
         int j_vx = std::max(0, (int)(y / dx));
-#pragma omp parallel for collapse(2)
         for (int j = j_vx; j < std::min(ny, j_vx + 2); j++) {
             for (int i = i_vx; i < std::min(nx, i_vx + 2); i++) {
                 float kern = kernel((x - i * dx - 0.5f * dx) / dx) *
@@ -251,7 +250,6 @@ inline int particles_speed_to_grid(particle_field *particles, scalar_field *vx,
         // --- vy stencil: collocated in x, staggered in y ---
         int i_vy = std::max(0, (int)(x / dx));
         int j_vy = std::max(0, (int)(y / dx - 0.5)); // matches get_speed
-#pragma omp parallel for collapse(2)
         for (int j = j_vy; j < std::min(ny, j_vy + 2); j++) {
             for (int i = i_vy; i < std::min(nx, i_vy + 2); i++) {
                 float kern = kernel((x - i * dx) / dx) *
@@ -925,42 +923,22 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
         }
     }
 
-    // After the P2G normalization loop, add:
-
-    // Free-slip on left/right walls: ∂vy/∂x = 0
+    // Free-slip on left/right walls
     for (int j = 0; j < vy_ny; j++) {
-        SET(vy, 0, j, GET(vy, 1, j));                 // left wall
-        SET(vy, vy_nx - 1, j, GET(vy, vy_nx - 2, j)); // right wall
+        SET(vy, 0, j, GET(vy, 1, j));
+        SET(vy, vy_nx - 1, j, GET(vy, vy_nx - 2, j));
     }
 
-    // Symmetrically, for vx on horizontal walls: ∂vx/∂y = 0
+    // for vx on horizontal walls
     for (int i = 0; i < vx_nx; i++) {
-        SET(vx, i, 0, GET(vx, i, 1));                 // bottom wall
-        SET(vx, i, vx_ny - 1, GET(vx, i, vx_ny - 2)); // top wall
+        SET(vx, i, 0, GET(vx, i, 1));
+        SET(vx, i, vx_ny - 1, GET(vx, i, vx_ny - 2));
     }
 
     return EXIT_SUCCESS;
 }
 
 void apply_gravity(particle_field *particles, float g, float dt) {
-    //     int nx = dom->nx, ny = dom->ny;
-
-    // #pragma omp parallel for collapse(2)
-    //     for (int j = 0; j < ny; j++) {
-    //         for (int i = 0; i < nx; i++) {
-    //             float cell_type = GET(dom, i, j);
-    //             float cell_upper;
-    //             if (j != ny - 1)
-    //                 cell_upper = GET(dom, i, j + 1);
-    //             else
-    //                 cell_upper = SOLID;
-    //             if (cell_type == LIQUID || cell_upper == LIQUID) {
-    //                 float init_vy = GET(vy, i, j);
-    //                 SET(vy, i, j, init_vy - g * dt);
-    //             }
-    //         }
-    //     }
-
 #pragma omp parallel for
     for (int k = 0; k < particles->N; k++) {
         particles->velocity[2 * k + 1] -= g * dt;
@@ -1231,14 +1209,9 @@ void refill_domain(particle_field *particles, scalar_field *dom,
         for (int i = 0; i < nx; i++) {
             float cell_type = GET(dom, i, j);
             int cell_density = density[j * nx + i];
-            bool solid_neighbour = false;
-            if (GET(dom, i + 1, j) == SOLID || GET(dom, i - 1, j) == SOLID ||
-                GET(dom, i, j + 1) == SOLID || GET(dom, i, j - 1) == SOLID)
-                solid_neighbour = true;
 
             if (cell_type == LIQUID) {
-                if (cell_density >= percent_limit * particle_density &&
-                    !solid_neighbour) {
+                if (cell_density >= percent_limit * particle_density) {
                     fill_cell(i, j, particles, vx, vy, dom, particle_density,
                               density, dt, log_file);
                 }
@@ -1312,6 +1285,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
     float percent_limit = data.value("particle_percentage_limit", 0.3);
     float flip_param = data.value("flip", 0.0f);
     LOG_INFO(log_file, "FLIP percentage is " << flip_param * 100);
+    LOG_INFO(log_file, "Refilling at " << percent_limit * 100 << "%");
 
     bool gravity = data.value("gravity", false);
     float g = data.value("g", 9.81);
