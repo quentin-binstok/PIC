@@ -1140,18 +1140,15 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
 
 void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
                scalar_field *vy, scalar_field *dom, int imposed_density,
-               std::vector<int> density, float dt, std::ofstream &log_file) {
+               std::vector<int> density, float dt, std::mt19937 &gen,
+               std::uniform_real_distribution<float> &jitter,
+               std::uniform_real_distribution<float> &birth_dist,
+               std::ofstream &log_file) {
     // LOG_INFO(log_file, "Filling cell " << i << " " << j);
     int nx = vx->nx, ny = vx->ny;
     float dx = vx->dx;
 
     int cell_density = density[j * nx + i];
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> jitter(-0.5 * dx, 0.5 * dx);
-    std::uniform_real_distribution<float> prob(0.0f, 1.0f);
-    std::uniform_real_distribution<float> birth_dist(0.0f, dt);
 
     int to_add = std::max(0, (int)floor(imposed_density - cell_density));
 
@@ -1205,6 +1202,7 @@ void refill_domain(particle_field *particles, scalar_field *dom,
     std::uniform_real_distribution<float> prob(0.0f, 1.0f);
     std::uniform_real_distribution<float> birth_dist(0.0f, dt);
 
+#pragma omp parallel for collapse(2)
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
             float cell_type = GET(dom, i, j);
@@ -1212,8 +1210,9 @@ void refill_domain(particle_field *particles, scalar_field *dom,
 
             if (cell_type == LIQUID) {
                 if (cell_density >= percent_limit * particle_density) {
+#pragma omp critical
                     fill_cell(i, j, particles, vx, vy, dom, particle_density,
-                              density, dt, log_file);
+                              density, dt, gen, prob, birth_dist, log_file);
                 }
                 // change to air
                 else if (cell_density < 1) {
