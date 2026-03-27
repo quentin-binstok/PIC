@@ -1089,11 +1089,11 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
                 // particles->velocity[2 * p] *= -1;
                 particles->xyz[2 * p] = 2 * dx / 3;
             } else if (i == nx - 1) {
-                particles->xyz[2 * p] = nx * dx - 2 * dx / 3;
+                particles->xyz[2 * p] = (nx-1) * dx - 2 * dx / 3;
             } else if (j == 0) {
                 particles->xyz[2 * p + 1] = 2 * dx / 3;
             } else if (j == ny - 1) {
-                particles->xyz[2 * p + 1] = ny * dx - 2 * dx / 3;
+                particles->xyz[2 * p + 1] = (ny-1) * dx - 2 * dx / 3;
             }
             // } else if (j == 0 || j == ny - 1) {
             //     particles->velocity[2 * p + 1] *= -1;
@@ -1308,7 +1308,15 @@ int solver_pic(json &data, std::ofstream &log_file) {
         max_iter = data["max_iter"];
 
     int particle_density = data.value("particle_density", 8);
-    int creation_rate = data.value("creation_rate", 1000);
+    float speed_x = 0.0f;
+    for (const auto &bc : data["bc"]) {
+        if (bc.contains("type") && bc["type"].get<float>() == 3.0f) {
+            if (bc.contains("speed_x")) {
+                speed_x = bc["speed_x"].get<float>();
+            }
+        }
+    }
+    int creation_rate = particle_density * speed_x  / dx;
     float percent_limit = data.value("particle_percentage_limit", 0.3);
     float flip_param = data.value("flip", 0.0f);
     LOG_INFO(log_file, "FLIP percentage is " << flip_param * 100);
@@ -1445,8 +1453,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
         std::fill(density.begin(), density.end(), 0);
         update_particles_pic(particles, vx, vy, dom, creation_rate, dt, density,
                              log_file);
-        /* refill_domain(particles, dom, vx, vy, density, particle_density,
-                      percent_limit, dt, log_file); */
+        refill_domain(particles, dom, vx, vy, density, particle_density,
+                      percent_limit, dt, log_file);
 
         for (int k = 0; k < fields.nb_fields; k++) {
             scalar_field *tmp = scalar_field_copy(fields.fields[k], log_file);
