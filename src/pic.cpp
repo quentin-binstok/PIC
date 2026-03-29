@@ -418,7 +418,7 @@ inline float residual_pic(scalar_field *p, scalar_field *vx, scalar_field *vy,
     int ny = p->ny;
 
     float dx = dom->dx;
-    const float alpha = dx * dx * rho / dt;
+     float alpha = dx * dx * rho / dt;
     float beta = rho * dx / dt;
 
     float norm_squared = 0;
@@ -525,7 +525,7 @@ inline int jacobi_pic(scalar_field *p, scalar_field *temp_p, scalar_field *div,
     int ny = p->ny;
 
     float dx = dom->dx;
-    const float alpha = dx * dx * rho / dt;
+     float alpha = dx * dx * rho / dt;
     float beta = rho * dx / dt;
 
     int iter = 0;
@@ -687,14 +687,14 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
     int nx = p->nx;
     int ny = p->ny;
     float dx = dom->dx;
-    const float alpha = dx * dx * rho / dt;
+     float alpha = dx * dx * rho / dt;
     float beta = rho * dx / dt;
     int iter = 0;
 
     // parameters needed for the algorithm
-    const int N = std::min(nx, ny);
-    const float pi = 3.14159265358979;
-    const float omega = std::min(1.95f, 2.0f / (1.0f + std::sin(pi / N)));
+     int N = std::min(nx, ny);
+     float pi = 3.14159265358979;
+     float omega = std::min(1.95f, 2.0f / (1.0f + std::sin(pi / N)));
 
     float norm_b = 0;
     for (int j = 0; j < ny; j++) {
@@ -838,14 +838,12 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
 */
 inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                                 scalar_field *vy, scalar_field *dom, float dx,
-                                float dt, float rho, std::ofstream &log_file,
-                                std::vector<float> &speed_condition) {
+                                float dt, float rho, std::ofstream &log_file) {
     LOG_INFO(log_file, "Projecting the velocity field")
     int vx_nx = vx->nx;
     int vx_ny = vx->ny;
     int vy_nx = vy->nx;
     int vy_ny = vy->ny;
-    int smooth = -1;
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < vx_ny; j++) {
         for (int i = 0; i < vx_nx; i++) {
@@ -854,25 +852,7 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                 continue;
             }
             if (GET(dom, i, j) == DIRICHLET) {
-                SET(vx, i, j, 0);
-                if (i == 0) {
-                    float v = speed_condition[0];
-                    if (j < smooth)
-                        v *= (float)(j) / smooth;
-                    if (j > vx_ny - smooth)
-                        v *= (float)(vx_ny - j - 1) / smooth;
-                    SET(vx, i, j, v);
-                }
-
-                if (i == vx_nx - 1) {
-                    float v = speed_condition[1];
-                    if (j < smooth)
-                        v *= (float)j / smooth;
-                    if (j > vx_ny - smooth)
-                        v *= (float)(vx_ny - j - 1) / smooth;
-                    SET(vx, i, j, v);
-                }
-
+                
                 continue;
             }
             if (i == vx_nx - 1) {
@@ -893,24 +873,6 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                 continue;
             }
             if (GET(dom, i, j) == DIRICHLET) {
-                SET(vy, i, j, 0);
-                if (j == 0) {
-                    float v = speed_condition[3];
-                    if (i < smooth)
-                        v *= (float)i / smooth;
-                    if (i > vy_nx - smooth)
-                        v *= (float)(vy_nx - i - 1) / smooth;
-                    SET(vy, i, j, v);
-                }
-
-                if (j == vy_ny - 1) {
-                    float v = speed_condition[2];
-                    if (i < smooth)
-                        v *= (float)i / smooth;
-                    if (i > vy_nx - smooth)
-                        v *= (float)(vy_nx - i - 1) / smooth;
-                    SET(vy, i, j, v);
-                }
                 continue;
             }
             if (j == vy_ny - 1) {
@@ -933,7 +895,7 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
     for (int i = 0; i < vx_nx; i++) {
         SET(vx, i, 0, GET(vx, i, 1));
         SET(vx, i, vx_ny - 1, GET(vx, i, vx_ny - 2));
-    }
+    } 
 
     return EXIT_SUCCESS;
 }
@@ -1021,9 +983,7 @@ void remove_particle(particle_field *particles, int p) {
     particles->N--;
 }
 
-inline int update_particles_pic(particle_field *particles, scalar_field *vx,
-                                scalar_field *vy, scalar_field *dom,
-                                int creation_rate, float dt,
+inline int check_particles(particle_field *particles, scalar_field *dom,
                                 std::vector<int> &density,
                                 std::ofstream &log_file) {
     LOG_INFO(log_file, "Updating particles")
@@ -1034,12 +994,6 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
 
     std::fill(density.begin(), density.end(), 0);
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> jitter(-0.5 * dx, 0.5 * dx);
-    std::uniform_real_distribution<float> prob(0.0f, 1.0f);
-    std::uniform_real_distribution<float> birth_dist(0.0f, dt);
-
     // Remove invalid particles
     int p = 0;
     while (p < particles->N) {
@@ -1047,8 +1001,9 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
         float x = particles->xyz[2 * p];
         float y = particles->xyz[2 * p + 1];
 
-        int i = (int)floor(x / dx + 0.5f);
-        int j = (int)floor(y / dx + 0.5f);
+        int i = (int)(x / dx + 0.5f);
+        int j = (int)(y / dx + 0.5f);
+
 
         // Check if the particle is out of bounds
         if (i < 0 || j < 0 || i >= nx || j >= ny) {
@@ -1059,183 +1014,140 @@ inline int update_particles_pic(particle_field *particles, scalar_field *vx,
         // Check if the particle is in a solid cell
         float cell = GET(dom, i, j);
         if (cell == SOLID) {
-            // remove_particle(particles, p);
-            // particles->velocity[2 * p] *= -1;
-            // particles->velocity[2 * p + 1] *= -1;
-
-            if (i == 0) {
-                // particles->velocity[2 * p] *= -1;
-                particles->xyz[2 * p] = 2 * dx / 3;
-            } else if (i == nx - 1) {
-                particles->xyz[2 * p] = (nx-1) * dx - 2 * dx / 3;
-            } else if (j == 0) {
-                particles->xyz[2 * p + 1] = 2 * dx / 3;
-            } else if (j == ny - 1) {
-                particles->xyz[2 * p + 1] = (ny-1) * dx - 2 * dx / 3;
-            }
-            // } else if (j == 0 || j == ny - 1) {
-            //     particles->velocity[2 * p + 1] *= -1;
-            else {
-                remove_particle(particles, p);
-                continue;
-            }
-            // continue;
+            remove_particle(particles, p);
+            continue;
         }
 
         density[j * nx + i]++;
         p++;
     }
 
-    // Emit new particles from (inflow) cells
-    for (int j = 0; j < ny; j++) {
-        for (int i = 0; i < nx; i++) {
-
-            float cell = GET(dom, i, j);
-
-            if (cell == DIRICHLET) {
-                float n = dt * creation_rate;
-                // float frac = n - floor(n);
-                int to_add = (int)floor(n); // + (prob(gen) < frac ? 1 : 0);
-
-                for (int k = 0; k < to_add; k++) {
-
-                    // Jittered spawn position within the cell
-                    float x = i * dx + jitter(gen);
-                    float y = j * dx + jitter(gen);
-
-                    float vx_p, vy_p;
-                    get_speed(&vx_p, &vy_p, x, y, vx, vy, log_file);
-
-                    float tau = birth_dist(gen);
-                    float remaining = dt - tau;
-                    advect_single_particle(&x, &y, vx, vy, remaining, log_file);
-
-                    int fi = (int)floor(x / dx + 0.5f);
-                    int fj = (int)floor(y / dx + 0.5f);
-
-                    if (fi < 0 || fj < 0 || fi >= nx || fj >= ny) {
-                        continue;
-                    } else if (GET(dom, fi, fj) == SOLID) {
-                        continue;
-                    } else {
-                        particles->xyz.push_back(x);
-                        particles->xyz.push_back(y);
-
-                        particles->velocity.push_back(vx_p);
-                        particles->velocity.push_back(vy_p);
-
-                        particles->id.push_back(particles->next_id);
-                        particles->next_id++;
-                        particles->N++;
-
-                        density[fj * nx + fi]++;
-                    }
-                }
-            }
-        }
-    }
-
     return EXIT_SUCCESS;
 }
 
-void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
-               scalar_field *vy, scalar_field *dom, int imposed_density,
-               std::vector<int> density, float dt, std::ofstream &log_file) {
-    // LOG_INFO(log_file, "Filling cell " << i << " " << j);
-    int nx = vx->nx, ny = vx->ny;
+inline void fill_cell(int i, int j,
+                      particle_field* particles,
+                      scalar_field* vx,
+                      scalar_field* vy,
+                      scalar_field* dom,
+                      int imposed_density,
+                      std::vector<int>& density,
+                      float dt,
+                      RNG& rng,
+                      std::ofstream& log_file)
+{
+    int nx = vx->nx;
+    int ny = vx->ny;
     float dx = vx->dx;
 
-    int cell_density = density[j * nx + i];
+    int idx = j * nx + i;
+    int cell_density = density[idx];
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> jitter(-0.5 * dx, 0.5 * dx);
-    std::uniform_real_distribution<float> prob(0.0f, 1.0f);
-    std::uniform_real_distribution<float> birth_dist(0.0f, dt);
+    int to_add = std::max(0, imposed_density - cell_density);
 
-    int to_add = std::max(0, (int)floor(imposed_density - cell_density));
+    for (int k = 0; k < to_add; ++k) {
 
-    for (int k = 0; k < to_add; k++) {
-        // Jittered spawn position within the cell
-        float x = i * dx + jitter(gen);
-        float y = j * dx + jitter(gen);
+        // Spawn position (jittered inside cell)
+        float x = i * dx + rng.jitter(rng.gen);
+        float y = j * dx + rng.jitter(rng.gen);
 
+        // Get velocity at position
         float vx_p, vy_p;
         get_speed(&vx_p, &vy_p, x, y, vx, vy, log_file);
 
-        float tau = birth_dist(gen);
+        // Random birth time integration
+        float tau = rng.birth(rng.gen);
         float remaining = dt - tau;
+
         advect_single_particle(&x, &y, vx, vy, remaining, log_file);
 
-        int fi = (int)floor(x / dx + 0.5f);
-        int fj = (int)floor(y / dx + 0.5f);
+        // Compute new cell index (faster than floor)
+        int fi = (int)(x / dx + 0.5f);
+        int fj = (int)(y / dx + 0.5f);
 
-        if (fi < 0 || fj < 0 || fi >= nx || fj >= ny) {
+        // Bounds + solid check (merged for branch efficiency)
+        if (fi < 0 || fj < 0 || fi >= nx || fj >= ny)
             continue;
-        } else if (GET(dom, fi, fj) == SOLID) {
+
+        if (GET(dom, fi, fj) == SOLID)
             continue;
-        } else {
-            particles->xyz.push_back(x);
-            particles->xyz.push_back(y);
 
-            particles->velocity.push_back(vx_p);
-            particles->velocity.push_back(vy_p);
+        // Add particle
+        particles->xyz.push_back(x);
+        particles->xyz.push_back(y);
 
-            particles->id.push_back(particles->next_id);
-            particles->next_id++;
-            particles->N++;
+        particles->velocity.push_back(vx_p);
+        particles->velocity.push_back(vy_p);
 
-            density[fj * nx + fi]++;
-        }
+        particles->id.push_back(particles->next_id++);
+
+        // Optional: remove if you switch to size()
+        particles->N++;
+
+        // Update density
+        density[fj * nx + fi]++;
     }
-    // LOG_INFO(log_file, "Ended filling cell");
 }
 
-void refill_domain(particle_field *particles, scalar_field *dom,
-                   scalar_field *vx, scalar_field *vy,
-                   std::vector<int> &density, int particle_density,
-                   float percent_limit, float dt, std::ofstream &log_file) {
+inline void refill_domain(particle_field* particles,
+                          scalar_field* dom,
+                          scalar_field* vx,
+                          scalar_field* vy,
+                          std::vector<int>& density,
+                          int particle_density,
+                          bool refill,
+                          float creation_rate,
+                          float dt,
+                          RNG& rng,
+                          std::ofstream& log_file)
+{
     LOG_INFO(log_file, "Refilling domain");
-    int nx = dom->nx, ny = dom->ny;
-    float dx = dom->dx;
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> jitter(-0.5 * dx, 0.5 * dx);
-    std::uniform_real_distribution<float> prob(0.0f, 1.0f);
-    std::uniform_real_distribution<float> birth_dist(0.0f, dt);
+    int nx = dom->nx;
+    int ny = dom->ny;
 
-    for (int j = 0; j < ny; j++) {
-        for (int i = 0; i < nx; i++) {
+    for (int j = 0; j < ny; ++j) {
+        for (int i = 0; i < nx; ++i) {
+
+            int idx = j * nx + i;
+
             float cell_type = GET(dom, i, j);
-            int cell_density = density[j * nx + i];
+            int cell_density = density[idx];
 
-            if (cell_type == LIQUID) {
-                if (cell_density >= percent_limit * particle_density) {
-                    fill_cell(i, j, particles, vx, vy, dom, particle_density,
-                              density, dt, log_file);
+            // --- DIRICHLET: inflow ---
+            if (cell_type == DIRICHLET) {
+
+                float n = dt * creation_rate;
+                int target_density = (int)n;
+
+                fill_cell(i, j, particles, vx, vy, dom,
+                          target_density,
+                          density, dt, rng, log_file);
+            }
+
+            // --- LIQUID cells ---
+            else if (cell_type == LIQUID) {
+
+                if (refill && cell_density < particle_density) {
+
+                    fill_cell(i, j, particles, vx, vy, dom,
+                              particle_density,
+                              density, dt, rng, log_file);
                 }
-                // change to air
                 else if (cell_density < 1) {
                     SET(dom, i, j, AIR);
                 }
-            } else if (cell_type == AIR && i != 0 && i != nx - 1 && j != 0 &&
-                       j != ny - 1) {
+            }
+
+            // --- AIR cells (convert back to liquid if needed) ---
+            else if (cell_type == AIR &&
+                     i > 0 && i < nx - 1 &&
+                     j > 0 && j < ny - 1) {
+
                 if (cell_density > 0) {
                     SET(dom, i, j, LIQUID);
                 }
             }
-            // float up_cell = GET(dom, i, j + 1);
-            // float down_cell = GET(dom, i, j - 1);
-            // float right_cell = GET(dom, i + 1, j);
-            // float left_cell = GET(dom, i - 1, j);
-            // if (up_cell == LIQUID && down_cell == LIQUID &&
-            //     right_cell == LIQUID && left_cell == LIQUID) {
-            //     SET(dom, i, j, LIQUID);
-
-            //     fill_cell(i, j, particles, vx, vy, dom, particle_density,
-            //               density, dt, log_file);
-            // }
         }
     }
 }
@@ -1256,9 +1168,9 @@ int solver_pic(json &data, std::ofstream &log_file) {
     }
 
     // Getting base params
-    const unsigned int nx = data["grid"][0], ny = data["grid"][1];
-    const float dx = data["space_steps"];
-    const int sampling_rate = data["sampling_rate"];
+     unsigned int nx = data["grid"][0], ny = data["grid"][1];
+     float dx = data["space_steps"];
+     int sampling_rate = data["sampling_rate"];
 
     float dt = 0.1;
     if (data.contains("delta_t"))
@@ -1282,7 +1194,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
 
     int particle_density = data.value("particle_density", 8);
     float speed_x = 0.0f;
-    for (const auto &bc : data["bc"]) {
+    for ( auto &bc : data["bc"]) {
         if (bc.contains("type") && bc["type"].get<float>() == 3.0f) {
             if (bc.contains("speed_x")) {
                 speed_x = bc["speed_x"].get<float>();
@@ -1290,10 +1202,9 @@ int solver_pic(json &data, std::ofstream &log_file) {
         }
     }
     int creation_rate = particle_density * speed_x  / dx;
-    float percent_limit = data.value("particle_percentage_limit", 0.3);
+    bool refill = data.value("refill", false);
     float flip_param = data.value("flip", 0.0f);
     LOG_INFO(log_file, "FLIP percentage is " << flip_param * 100);
-    LOG_INFO(log_file, "Refilling at " << percent_limit * 100 << "%");
 
     bool gravity = data.value("gravity", false);
     float g = data.value("g", 9.81);
@@ -1368,6 +1279,8 @@ int solver_pic(json &data, std::ofstream &log_file) {
         log_file << "\n";
         LOG_INFO(log_file, "Starting time loop " << i << " out of " << nt);
 
+        RNG rng(dom->dx, dt);
+
         if (gravity)
             apply_gravity(particles, g, dt);
 
@@ -1398,8 +1311,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
         std::memcpy(temp_vx->values, vx->values, nx * ny * sizeof(float));
         std::memcpy(temp_vy->values, vy->values, nx * ny * sizeof(float));
 
-        project_velocity_pic(p, vx, vy, dom, dx, dt, rho, log_file,
-                             speed_condition);
+        project_velocity_pic(p, vx, vy, dom, dx, dt, rho, log_file);
 
         // This is to be able to save it. It serves no purpose in the
         // algorithm
@@ -1425,10 +1337,10 @@ int solver_pic(json &data, std::ofstream &log_file) {
         advect_pic(particles, vx, vy, dt, log_file);
 
         std::fill(density.begin(), density.end(), 0);
-        update_particles_pic(particles, vx, vy, dom, creation_rate, dt, density,
-                             log_file);
-        refill_domain(particles, dom, vx, vy, density, particle_density,
-                      percent_limit, dt, log_file);
+        check_particles(particles, dom, density, log_file);
+        refill_domain(particles, dom, vx, vy, density,
+              particle_density, refill, creation_rate,
+              dt, rng, log_file);
 
         for (int k = 0; k < fields.nb_fields; k++) {
             scalar_field *tmp = scalar_field_copy(fields.fields[k], log_file);

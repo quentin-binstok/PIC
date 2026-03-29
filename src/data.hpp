@@ -2,6 +2,7 @@
 #define __SOLVER_DATA__
 #include <string>
 #include <vector>
+#include <random>
 
 #define GET(data, i, j) ((data)->values[(data)->nx * (j) + (i)])
 #define SET(data, i, j, val) ((data)->values[(data)->nx * (j) + (i)] = (val))
@@ -49,6 +50,19 @@ typedef struct _particle_field {
     std::vector<float> velocity; // idem
     std::vector<int> id;
 } particle_field;
+
+struct RNG {
+    std::mt19937 gen;
+    std::uniform_real_distribution<float> jitter;
+    std::uniform_real_distribution<float> prob;
+    std::uniform_real_distribution<float> birth;
+
+    RNG(float dx, float dt)
+        : gen(std::random_device{}()),
+          jitter(-0.5f * dx, 0.5f * dx),
+          prob(0.0f, 1.0f),
+          birth(0.0f, dt) {}
+};
 
 /*
  @brief Initialises a scalar field
