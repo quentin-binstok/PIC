@@ -838,12 +838,14 @@ inline int sor_pic(scalar_field *p, scalar_field *div, scalar_field *vx,
 */
 inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                                 scalar_field *vy, scalar_field *dom, float dx,
-                                float dt, float rho, std::ofstream &log_file) {
+                                float dt, float rho, std::ofstream &log_file,
+                                std::vector<float> &speed_condition) {
     LOG_INFO(log_file, "Projecting the velocity field")
     int vx_nx = vx->nx;
     int vx_ny = vx->ny;
     int vy_nx = vy->nx;
     int vy_ny = vy->ny;
+    int smooth = -1;
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < vx_ny; j++) {
         for (int i = 0; i < vx_nx; i++) {
@@ -852,7 +854,25 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                 continue;
             }
             if (GET(dom, i, j) == DIRICHLET) {
-                
+                SET(vx, i, j, 0);
+                if (i == 0) {
+                    float v = speed_condition[0];
+                    if (j < smooth)
+                        v *= (float)(j) / smooth;
+                    if (j > vx_ny - smooth)
+                        v *= (float)(vx_ny - j - 1) / smooth;
+                    SET(vx, i, j, v);
+                }
+
+                if (i == vx_nx - 1) {
+                    float v = speed_condition[1];
+                    if (j < smooth)
+                        v *= (float)j / smooth;
+                    if (j > vx_ny - smooth)
+                        v *= (float)(vx_ny - j - 1) / smooth;
+                    SET(vx, i, j, v);
+                }
+
                 continue;
             }
             if (i == vx_nx - 1) {
@@ -873,6 +893,24 @@ inline int project_velocity_pic(scalar_field *p, scalar_field *vx,
                 continue;
             }
             if (GET(dom, i, j) == DIRICHLET) {
+                SET(vy, i, j, 0);
+                if (j == 0) {
+                    float v = speed_condition[3];
+                    if (i < smooth)
+                        v *= (float)i / smooth;
+                    if (i > vy_nx - smooth)
+                        v *= (float)(vy_nx - i - 1) / smooth;
+                    SET(vy, i, j, v);
+                }
+
+                if (j == vy_ny - 1) {
+                    float v = speed_condition[2];
+                    if (i < smooth)
+                        v *= (float)i / smooth;
+                    if (i > vy_nx - smooth)
+                        v *= (float)(vy_nx - i - 1) / smooth;
+                    SET(vy, i, j, v);
+                }
                 continue;
             }
             if (j == vy_ny - 1) {
@@ -1118,10 +1156,10 @@ inline void refill_domain(particle_field* particles,
             if (cell_type == DIRICHLET) {
 
                 float n = dt * creation_rate;
-                int target_density = (int)n;
+                int target_number = (int)n;
 
                 fill_cell(i, j, particles, vx, vy, dom,
-                          target_density,
+                          target_number,
                           density, dt, rng, log_file);
             }
 
@@ -1311,7 +1349,7 @@ int solver_pic(json &data, std::ofstream &log_file) {
         std::memcpy(temp_vx->values, vx->values, nx * ny * sizeof(float));
         std::memcpy(temp_vy->values, vy->values, nx * ny * sizeof(float));
 
-        project_velocity_pic(p, vx, vy, dom, dx, dt, rho, log_file);
+        project_velocity_pic(p, vx, vy, dom, dx, dt, rho, log_file, speed_condition);
 
         // This is to be able to save it. It serves no purpose in the
         // algorithm

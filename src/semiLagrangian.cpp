@@ -615,12 +615,16 @@ inline int sor(scalar_field *p, scalar_field *div, scalar_field *vx,
  @param dt: the time step
  @param rho: the density
 */
-inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
-                            scalar_field *dom, float dx, float dt, float rho,
-                            std::ofstream &log_file) {
+inline int project_velocity(scalar_field *p, scalar_field *vx,
+                                scalar_field *vy, scalar_field *dom, float dx,
+                                float dt, float rho, std::ofstream &log_file,
+                                std::vector<float> &speed_condition){
     LOG_INFO(log_file, "Projecting the velocity field")
     int vx_nx = vx->nx;
     int vx_ny = vx->ny;
+    int vy_nx = vy->nx;
+    int vy_ny = vy->ny;
+    int smooth = 4;
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < vx_ny; j++) {
         for (int i = 0; i < vx_nx; i++) {
@@ -629,19 +633,37 @@ inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
                 continue;
             }
             if (GET(dom, i, j) == DIRICHLET) {
+                SET(vx, i, j, 0);
+                if (i == 0) {
+                    float v = speed_condition[0];
+                    if (j < smooth)
+                        v *= (float)(j) / smooth;
+                    if (j > vx_ny - smooth)
+                        v *= (float)(vx_ny - j - 1) / smooth;
+                    SET(vx, i, j, v);
+                }
+
+                if (i == vx_nx - 1) {
+                    float v = speed_condition[1];
+                    if (j < smooth)
+                        v *= (float)j / smooth;
+                    if (j > vx_ny - smooth)
+                        v *= (float)(vx_ny - j - 1) / smooth;
+                    SET(vx, i, j, v);
+                }
+
                 continue;
             }
             if (i == vx_nx - 1) {
-                float v_x = GET(vx, i - 1, j);
-                SET(vx, i, j, v_x);
+                float gradp_x = (GET(p, i, j) - GET(p, i - 1, j)) / dx;
+                SET(vx, i, j, GET(vx, i, j) - dt * gradp_x / rho);
                 continue;
             }
             float gradp_x = (GET(p, i + 1, j) - GET(p, i, j)) / dx;
             SET(vx, i, j, GET(vx, i, j) - dt * gradp_x / rho);
         }
     }
-    int vy_nx = vy->nx;
-    int vy_ny = vy->ny;
+
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < vy_ny; j++) {
         for (int i = 0; i < vy_nx; i++) {
@@ -650,17 +672,36 @@ inline int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
                 continue;
             }
             if (GET(dom, i, j) == DIRICHLET) {
+                SET(vy, i, j, 0);
+                if (j == 0) {
+                    float v = speed_condition[3];
+                    if (i < smooth)
+                        v *= (float)i / smooth;
+                    if (i > vy_nx - smooth)
+                        v *= (float)(vy_nx - i - 1) / smooth;
+                    SET(vy, i, j, v);
+                }
+
+                if (j == vy_ny - 1) {
+                    float v = speed_condition[2];
+                    if (i < smooth)
+                        v *= (float)i / smooth;
+                    if (i > vy_nx - smooth)
+                        v *= (float)(vy_nx - i - 1) / smooth;
+                    SET(vy, i, j, v);
+                }
                 continue;
             }
             if (j == vy_ny - 1) {
-                float v_y = GET(vy, i, j - 1);
-                SET(vy, i, j, v_y);
+                float gradp_y = (GET(p, i, j) - GET(p, i, j - 1)) / dx;
+                SET(vy, i, j, GET(vy, i, j) - dt * gradp_y / rho);
                 continue;
             }
             float gradp_y = (GET(p, i, j + 1) - GET(p, i, j)) / dx;
             SET(vy, i, j, GET(vy, i, j) - dt * gradp_y / rho);
         }
     }
+
     return EXIT_SUCCESS;
 }
 /*
@@ -695,7 +736,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     if (data.contains("max_iter"))
         max_iter = data["max_iter"];
 
-    std::vector<float> placeholder;
+    std::vector<float> speed_condition;
 
     // Initialising the fields
     scalar_field *vx = scalar_field_init("vx", nx, ny, 0.5, 0, dx, log_file);
@@ -712,7 +753,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     create_circle(dom, "ic_cylinders", data, log_file);
     initialize_speed(vx, dom, data, "ic_vx", log_file);
     initialize_speed(vy, dom, data, "ic_vy", log_file);
-    boundary_condition(vx, vy, dom, placeholder, data, "bc", log_file);
+    boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
 
     scalar_field *temp_vx = scalar_field_copy(vx, log_file);
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
@@ -752,7 +793,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
             LOG_ERR(log_file, "Iteration algorithm not supported");
             return EXIT_FAILURE;
         }
-        project_velocity(p, vx, vy, dom, dx, dt, rho, log_file);
+        project_velocity(p, vx, vy, dom, dx, dt, rho, log_file, speed_condition);
 
         // This is to be able to save it. It serves no purpose in the
         // algorithm
