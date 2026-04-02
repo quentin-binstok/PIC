@@ -8,8 +8,9 @@
 #include <fstream>
 
 using json = nlohmann::json;
+
 /*
- @brief Applies some initial conditions to the scalar field
+ @brief Applies some initial condition "condition_name" to the domain
  @param scalar_field: the field to which apply the conditions (the domain)
  @param data: the full input json
  @param condition_name: the name of the initial condition in the json
@@ -17,8 +18,8 @@ using json = nlohmann::json;
 */
 int initialize_domain(scalar_field *dom, json &data, std::string condition_name,
                       std::ofstream &log_file) {
-    LOG_INFO(log_file, "Applying initial domain " << condition_name << " on "
-                                                  << dom->name);
+    LOG_INFO(log_file, "Applying initial domain condition "
+                           << condition_name << " on " << dom->name);
     auto condition = data[condition_name];
     int nx = dom->nx, ny = dom->ny;
 
@@ -42,7 +43,10 @@ int initialize_domain(scalar_field *dom, json &data, std::string condition_name,
     }
     return EXIT_SUCCESS;
 }
-// Initializes the speed fields
+
+/*
+ @brief Specialized function to apply initial conditions to the velocity fields
+*/
 int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
                      std::string condition_name, std::ofstream &log_file) {
     LOG_INFO(log_file, "Applying " << condition_name << " on " << field->name);
@@ -91,7 +95,9 @@ int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
     return EXIT_SUCCESS;
 }
 
-// Initializes the speed fields
+/*
+ @brief Applies speed & dom BCs
+*/
 int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom,
                        std::vector<float> &speed_condition, json &data,
                        std::string condition_name, std::ofstream &log_file) {
@@ -131,7 +137,7 @@ int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom,
             speed_condition[k] = speed_y;
         }
 
-        int smooth = 10;
+        int smooth = -1;
 
         switch (side) {
         case 0: {
@@ -317,31 +323,14 @@ int get_fields(user_fields *fields, json &data, std::ofstream &log) {
         scalar_field *field = fields->fields[l];
 
         initialize_field(field, fields->names[l], data, log);
-
-        // for (int k = 0; k < (int)cond.size(); k++) {
-        //     float value = cond[k]["value"];
-        //     int start_x = cond[k]["tl"][0], start_y = cond[k]["tl"][1];
-        //     int end_x = cond[k]["br"][0], end_y = cond[k]["br"][1];
-        //     // Checking that we're in the grid
-        //     if (start_x < 0 || start_y < 0 || end_x > nx - 1 ||
-        //         end_y > ny - 1) {
-        //         LOG_ERR(log, "cond " << k << " in " << fields->names[l]
-        //                              << " out of bounds");
-        //         return EXIT_FAILURE;
-        //     }
-        //     // Adding the cond to the grid
-        //     for (int j = start_y; j <= end_y; j++) {
-        //         for (int i = start_x; i <= end_x; i++) {
-        //             float val = GET(field, i, j);
-        //             SET(field, i, j, value + val);
-        //         }
-        //     }
-        // }
     }
 
     return EXIT_SUCCESS;
 }
 
+/*
+ @brief applies the cylinders condition on the domain
+*/
 int create_circle(scalar_field *dom, std::string condition_name, json &data,
                   std::ofstream &log_file) {
     LOG_INFO(log_file, "Adding cylinders");
@@ -366,7 +355,7 @@ int create_circle(scalar_field *dom, std::string condition_name, json &data,
             for (int i = x - radius - 10; i <= x + radius + 10; i++) {
                 float condition =
                     (i - x) * (i - x) + (j - y) * (j - y) - radius * radius;
-                if (condition <= 0 && i >= 0 && i < nx && j >= 0 && j < ny)
+                if (condition < 0 && i >= 0 && i < nx && j >= 0 && j < ny)
                     SET(dom, i, j, 1);
             }
         }

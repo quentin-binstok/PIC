@@ -1,7 +1,11 @@
 #ifndef __SOLVER_DATA__
 #define __SOLVER_DATA__
+#include <filesystem>
+#include <random>
 #include <string>
 #include <vector>
+
+namespace fs = std::filesystem;
 
 #define GET(data, i, j) ((data)->values[(data)->nx * (j) + (i)])
 #define SET(data, i, j, val) ((data)->values[(data)->nx * (j) + (i)] = (val))
@@ -50,6 +54,17 @@ typedef struct _particle_field {
     std::vector<int> id;
 } particle_field;
 
+struct RNG {
+    std::mt19937 gen;
+    std::uniform_real_distribution<float> jitter;
+    std::uniform_real_distribution<float> prob;
+    std::uniform_real_distribution<float> birth;
+
+    RNG(float dx, float dt)
+        : gen(std::random_device{}()), jitter(-0.5f * dx, 0.5f * dx),
+          prob(0.0f, 1.0f), birth(0.0f, dt) {}
+};
+
 /*
  @brief Initialises a scalar field
  @param name: the name, useful when writing files
@@ -63,7 +78,9 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
                                 const float y_internal, const float dx,
                                 std::ofstream &log_file);
 
-// Does not copy the values
+/*
+ @brief copies the field, but not the values (not a deep copy!)
+*/
 scalar_field *scalar_field_copy(const scalar_field *field,
                                 std::ofstream &log_file);
 
@@ -90,15 +107,17 @@ particle_field *particle_field_init_2D(const std::string name, const int N,
 particle_field *copy_particle_field(const particle_field *particles,
                                     std::ofstream &log_file);
 
+// Frees the user fields
 void user_field_free(user_fields *fields, std::ofstream &log);
 
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
-                       int numranks, bool vtp, std::ofstream &log_file);
+                       int numranks, bool vtp, std::ofstream &log_file,
+                       fs::path work_dir);
 
 int write_scalar_vtk(scalar_field *data, int step, int rank,
-                     std::ofstream &log_file);
+                     std::ofstream &log_file, fs::path work_dir);
 
 int write_particles_vtp(const particle_field *field, const int step,
-                        const int rank, const int ndim,
-                        std::ofstream &log_file);
+                        const int rank, const int ndim, std::ofstream &log_file,
+                        fs::path work_dir);
 #endif
