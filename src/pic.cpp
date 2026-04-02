@@ -8,12 +8,14 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <ostream>
 #include <random>
 
 using json = nlohmann::json;
+namespace fs = std::filesystem;
 
 /*
  @brief advects a single particle with the PIC scheme
@@ -468,7 +470,7 @@ inline void refill_domain(particle_field *particles, scalar_field *dom,
  @param data: the whole json
  @param log_file: the log file
 */
-int solver_pic(json &data, std::ofstream &log_file) {
+int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
     LOG_INFO(log_file, "Starting the PIC/FLIP solver");
 
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -565,21 +567,27 @@ int solver_pic(json &data, std::ofstream &log_file) {
                              log_file);
 
     // Manifests
-    write_manifest_vtk("particles", dt, nt, sampling_rate, 1, 1, log_file);
-    write_particles_vtp(particles, 0, 0, 2, log_file);
+    write_manifest_vtk("particles", dt, nt, sampling_rate, 1, 1, log_file,
+                       work_dir);
+    write_particles_vtp(particles, 0, 0, 2, log_file, work_dir);
 
-    write_manifest_vtk(vx->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(vy->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(p->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(div->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(dom->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(vx->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
+    write_manifest_vtk(vy->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
+    write_manifest_vtk(p->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
+    write_manifest_vtk(div->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
+    write_manifest_vtk(dom->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
 
     // Initial state
-    write_scalar_vtk(vx, 0, 0, log_file);
-    write_scalar_vtk(vy, 0, 0, log_file);
-    write_scalar_vtk(p, 0, 0, log_file);
-    write_scalar_vtk(div, 0, 0, log_file);
-    write_scalar_vtk(dom, 0, 0, log_file);
+    write_scalar_vtk(vx, 0, 0, log_file, work_dir);
+    write_scalar_vtk(vy, 0, 0, log_file, work_dir);
+    write_scalar_vtk(p, 0, 0, log_file, work_dir);
+    write_scalar_vtk(div, 0, 0, log_file, work_dir);
+    write_scalar_vtk(dom, 0, 0, log_file, work_dir);
 
     std::vector<int> density(nx * ny, 0);
 
@@ -635,13 +643,13 @@ int solver_pic(json &data, std::ofstream &log_file) {
 
         // save files
         if (sampling_rate && !(i % sampling_rate)) {
-            write_scalar_vtk(vx, i, 0, log_file);
-            write_scalar_vtk(vy, i, 0, log_file);
-            write_scalar_vtk(p, i, 0, log_file);
-            write_scalar_vtk(div, i, 0, log_file);
-            write_scalar_vtk(dom, i, 0, log_file);
+            write_scalar_vtk(vx, i, 0, log_file, work_dir);
+            write_scalar_vtk(vy, i, 0, log_file, work_dir);
+            write_scalar_vtk(p, i, 0, log_file, work_dir);
+            write_scalar_vtk(div, i, 0, log_file, work_dir);
+            write_scalar_vtk(dom, i, 0, log_file, work_dir);
 
-            write_particles_vtp(particles, i, 0, 2, log_file);
+            write_particles_vtp(particles, i, 0, 2, log_file, work_dir);
         }
 
         advect_pic(particles, vx, vy, dt, log_file);

@@ -1,4 +1,3 @@
-
 #include "conditions.hpp"
 #include "data.hpp"
 #include "nlohmann/json.hpp"
@@ -8,10 +7,12 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 
 using json = nlohmann::json;
+namespace fs = std::filesystem;
 
 /*
  @brief Applies semi-lagrangian advection to the field q
@@ -106,7 +107,8 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
  @param data: the whole json
  @param log_file: the log file
 */
-int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
+int solver_semi_lagrangian(json &data, std::ofstream &log_file,
+                           fs::path work_dir) {
     LOG_INFO(log_file, "Starting the semi-lagrangian solver");
     auto t0 = std::chrono::high_resolution_clock::now();
     if (check_params(data, log_file)) {
@@ -149,16 +151,20 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
     create_circle(dom, "ic_cylinders", data, log_file);
 
     // Manifests
-    write_manifest_vtk(vx->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(vy->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(p->name, dt, nt, sampling_rate, 1, 0, log_file);
-    write_manifest_vtk(div->name, dt, nt, sampling_rate, 1, 0, log_file);
+    write_manifest_vtk(vx->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
+    write_manifest_vtk(vy->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
+    write_manifest_vtk(p->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
+    write_manifest_vtk(div->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
 
     // Initial time step
-    write_scalar_vtk(vx, 0, 0, log_file);
-    write_scalar_vtk(vy, 0, 0, log_file);
-    write_scalar_vtk(p, 0, 0, log_file);
-    write_scalar_vtk(div, 0, 0, log_file);
+    write_scalar_vtk(vx, 0, 0, log_file, work_dir);
+    write_scalar_vtk(vy, 0, 0, log_file, work_dir);
+    write_scalar_vtk(p, 0, 0, log_file, work_dir);
+    write_scalar_vtk(div, 0, 0, log_file, work_dir);
 
     // Main time loop
     bool inverted = false;
@@ -197,10 +203,10 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file) {
         divergence(vx, vy, div, dom, speed_condition, log_file);
         // save files
         if (sampling_rate && !(i % sampling_rate)) {
-            write_scalar_vtk(vx, i, 0, log_file);
-            write_scalar_vtk(vy, i, 0, log_file);
-            write_scalar_vtk(p, i, 0, log_file);
-            write_scalar_vtk(div, i, 0, log_file);
+            write_scalar_vtk(vx, i, 0, log_file, work_dir);
+            write_scalar_vtk(vy, i, 0, log_file, work_dir);
+            write_scalar_vtk(p, i, 0, log_file, work_dir);
+            write_scalar_vtk(div, i, 0, log_file, work_dir);
         }
 
         // advect

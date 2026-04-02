@@ -1,11 +1,13 @@
-
 #include "data.hpp"
 #include "utils.hpp"
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <string>
+
+namespace fs = std::filesystem;
 
 /*
  @brief Initialises a scalar field
@@ -119,14 +121,15 @@ void user_field_free(user_fields *fields, std::ofstream &log) {
 
 // Write the scalar field to a paraview file
 int write_scalar_vtk(scalar_field *data, int step, int rank,
-                     std::ofstream &log_file) {
+                     std::ofstream &log_file, fs::path work_dir) {
     char out[512];
     if (data->name.size() > 256) {
-        LOG_ERR(log_file, "Error: data name too long for output VTK file");
+        LOG_ERR(log_file, "Error: name too long for Paraview manifest file");
         return 1;
     }
     sprintf(out, "data/%s_rank%d_%d.vti", data->name.c_str(), rank, step);
-    FILE *fp = fopen(out, "wb");
+    fs::path file_path = work_dir / out;
+    FILE *fp = fopen(file_path.c_str(), "wb");
     if (!fp) {
         LOG_ERR(log_file, "Error: Could not open output VTK file " << out);
         return 1;
@@ -171,14 +174,16 @@ int write_scalar_vtk(scalar_field *data, int step, int rank,
 }
 // Writes the manifest file, use the vtp param to say if it's a vtk or vtp
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
-                       int numranks, bool vtp, std::ofstream &log_file) {
+                       int numranks, bool vtp, std::ofstream &log_file,
+                       fs::path work_dir) {
     char out[512];
     if (name.size() > 256) {
         LOG_ERR(log_file, "Error: name too long for Paraview manifest file");
         return 1;
     }
     sprintf(out, "%s.pvd", name.c_str());
-    FILE *fp = fopen(out, "wb");
+    fs::path file_path = work_dir / out;
+    FILE *fp = fopen(file_path.c_str(), "wb");
     if (!fp) {
         LOG_ERR(log_file,
                 "Error: Could not open output VTK manifest file " << out);
@@ -214,11 +219,12 @@ int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
 }
 // Made by chatgpt because making it ourselves is not interesting
 int write_particles_vtp(const particle_field *field, const int step,
-                        const int rank, const int ndim,
-                        std::ofstream &log_file) {
+                        const int rank, const int ndim, std::ofstream &log_file,
+                        fs::path work_dir) {
     char out[512];
     sprintf(out, "data/%s_rank%d_%d.vtp", field->name.c_str(), rank, step);
-    FILE *fp = fopen(out, "wb");
+    fs::path file_path = work_dir / out;
+    FILE *fp = fopen(file_path.c_str(), "wb");
     if (!fp)
         return 1;
     /* ---- sizes ---- */

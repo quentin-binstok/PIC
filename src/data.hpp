@@ -1,8 +1,11 @@
 #ifndef __SOLVER_DATA__
 #define __SOLVER_DATA__
+#include <filesystem>
 #include <random>
 #include <string>
 #include <vector>
+
+namespace fs = std::filesystem;
 
 #define GET(data, i, j) ((data)->values[(data)->nx * (j) + (i)])
 #define SET(data, i, j, val) ((data)->values[(data)->nx * (j) + (i)] = (val))
@@ -108,12 +111,13 @@ particle_field *copy_particle_field(const particle_field *particles,
 void user_field_free(user_fields *fields, std::ofstream &log);
 
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
-                       int numranks, bool vtp, std::ofstream &log_file);
+                       int numranks, bool vtp, std::ofstream &log_file,
+                       fs::path work_dir);
 
 int write_scalar_vtk(scalar_field *data, int step, int rank,
-                     std::ofstream &log_file);
+                     std::ofstream &log_file, fs::path work_dir);
 
 int write_particles_vtp(const particle_field *field, const int step,
-                        const int rank, const int ndim,
-                        std::ofstream &log_file);
+                        const int rank, const int ndim, std::ofstream &log_file,
+                        fs::path work_dir);
 #endif

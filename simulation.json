@@ -1,9 +1,10 @@
 {
-	"solver": "semi-lagrangian",
+	"solver": "pic",
 	"iteration_algo": "SOR",
 	"sampling_rate": 10,
 	"log_file": "log.txt",
-	"flip": 0.95,
+	"dir": "../dam_break_2_cylinders_FLIP",
+	"flip": 1,
 
 	"grid": [200, 200],
 	"space_steps": 5e-3,
