@@ -11,8 +11,12 @@ The methods that will be implemented are:
 - the FLIP method,
 - and the APIC method.
 
-A more advanced topic will be explored, which is yet to be determined.
+A more advanced topic will be explored, which will be adding thermic effects to the simulations.
 
 ## Building
 
 To build, just run `./make.sh`. If you need to clean up the directory, run `./make.sh clean`. If you want to make a clean build, `./make.sh clean_build` is available.
+
+## Running
+
+Once you have obtained a binary file, run `./solver.out <json file>` to run the simulation.
