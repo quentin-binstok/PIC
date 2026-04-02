@@ -6,6 +6,7 @@
 #include <cstring>
 #include <fstream>
 #include <string>
+
 /*
  @brief Initialises a scalar field
  @param name: the name, useful when writing files
@@ -35,6 +36,10 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
     }
     return field;
 }
+
+/*
+ @brief copies the field, but not the values (not a deep copy!)
+*/
 scalar_field *scalar_field_copy(const scalar_field *field,
                                 std::ofstream &log_file) {
     scalar_field *new_field = new scalar_field;
@@ -54,6 +59,8 @@ scalar_field *scalar_field_copy(const scalar_field *field,
            field->nx * field->ny * sizeof(float));
     return new_field;
 }
+
+// Frees the field, including the given pointer
 void scalar_field_free(scalar_field *field, std::ofstream &log_file) {
     if (!field)
         return;
@@ -63,6 +70,7 @@ void scalar_field_free(scalar_field *field, std::ofstream &log_file) {
     free(field);
 }
 
+// Initializes the structure
 particle_field *particle_field_init_2D(const std::string name, const int N,
                                        std::ofstream &log_file) {
     LOG_INFO(log_file, "Initializing particle field " << name);
@@ -98,6 +106,7 @@ particle_field *copy_particle_field(const particle_field *particles,
     return field;
 }
 
+// Frees the user fields
 void user_field_free(user_fields *fields, std::ofstream &log) {
     if (!fields)
         return;

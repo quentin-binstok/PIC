@@ -1,8 +1,8 @@
 #ifndef __SOLVER_DATA__
 #define __SOLVER_DATA__
+#include <random>
 #include <string>
 #include <vector>
-#include <random>
 
 #define GET(data, i, j) ((data)->values[(data)->nx * (j) + (i)])
 #define SET(data, i, j, val) ((data)->values[(data)->nx * (j) + (i)] = (val))
@@ -58,10 +58,8 @@ struct RNG {
     std::uniform_real_distribution<float> birth;
 
     RNG(float dx, float dt)
-        : gen(std::random_device{}()),
-          jitter(-0.5f * dx, 0.5f * dx),
-          prob(0.0f, 1.0f),
-          birth(0.0f, dt) {}
+        : gen(std::random_device{}()), jitter(-0.5f * dx, 0.5f * dx),
+          prob(0.0f, 1.0f), birth(0.0f, dt) {}
 };
 
 /*
@@ -77,7 +75,9 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
                                 const float y_internal, const float dx,
                                 std::ofstream &log_file);
 
-// Does not copy the values
+/*
+ @brief copies the field, but not the values (not a deep copy!)
+*/
 scalar_field *scalar_field_copy(const scalar_field *field,
                                 std::ofstream &log_file);
 
@@ -104,6 +104,7 @@ particle_field *particle_field_init_2D(const std::string name, const int N,
 particle_field *copy_particle_field(const particle_field *particles,
                                     std::ofstream &log_file);
 
+// Frees the user fields
 void user_field_free(user_fields *fields, std::ofstream &log);
 
 int write_manifest_vtk(std::string name, double dt, int nt, int sampling_rate,
