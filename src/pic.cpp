@@ -1143,7 +1143,6 @@ inline void refill_domain(particle_field* particles,
 
     int nx = dom->nx;
     int ny = dom->ny;
-
     for (int j = 0; j < ny; ++j) {
         for (int i = 0; i < nx; ++i) {
 
@@ -1167,7 +1166,6 @@ inline void refill_domain(particle_field* particles,
             else if (cell_type == LIQUID) {
 
                 if (refill && cell_density < particle_density) {
-
                     fill_cell(i, j, particles, vx, vy, dom,
                               particle_density,
                               density, dt, rng, log_file);

@@ -13,3 +13,4 @@ float interpolate_bilinear(float x, float y, float x1, float y1, float q11,
                   ((dx * dy) / (Dx * Dy)) * q22;
     return value;
 }
+

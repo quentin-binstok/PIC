@@ -1,14 +1,14 @@
 {
 	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 2,
+	"sampling_rate": 10,
 	"log_file": "log.txt",
-	"flip": 0.95,
+	"flip": 1.0,
 
-	"grid": [200, 100],
-	"space_steps": 2e-3,
+	"grid": [200, 200],
+	"space_steps": 5e-3,
 	"nt": 1000,
-	"delta_t": 0.01,
+	"delta_t": 0.001,
 	"tol": 1e-2,
 	"max_iter": 1e5,
 	"rho": 1000.0,
@@ -20,7 +20,7 @@
 		{
 			"side": 0,
 			"type": 3.0,
-			"speed_x": 0.5
+			"speed_x": 5.0
 		},
 		{
 			"side": 1,
@@ -38,8 +38,8 @@
 
 	"ic_cylinders": [
 		{
-			"center": [75, 50],
-			"radius": 25
+			"center": [50, 100],
+			"radius": 15
 		}
 	],
 
