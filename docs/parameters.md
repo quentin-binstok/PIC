@@ -11,7 +11,7 @@ The available parameters can be grouped in several ways.
 - Type: string
 - Role: defines the solver used
 
-This can only be `"semi-lagangian"` for now.
+This can either be `semi-lagrangian` or `pic`.
 
 ### `iteration_algo`
 
@@ -34,6 +34,14 @@ The successive over-relaxation algorithm (SOR) is a variant of the Gauss-Seidel 
 - Type: string
 - Role: is the name of the log file
 - Default: `"log.txt"`
+
+### `flip`
+
+- Type: float
+- Role: defines the fraction of FLIP in a PIC/FLIP simulation
+- Default: 0
+
+This parameter is only applicable if the `pic` solver is used. It can be between zero and 1, with 0 being full PIC, and 1 being full FLIP.
 
 ## Physical & simulation parameters
 
@@ -67,10 +75,34 @@ The successive over-relaxation algorithm (SOR) is a variant of the Gauss-Seidel 
 - Type: integer
 - Role: the maximum number of iterations for the iteration algorithm
 
+### `particle_density`
+
+- Type: integer
+- Role: the number of particles per cell at the beginning of the simulation
+- Default: 8
+
+### `refill`
+
+- Type: bool
+- Role: defines whether the liquid cells should be refilled with particles or not
+- Default: false
+
 ### `rho`
 
 - Type: float
 - Role: the density of the fluid
+
+### `gravity`
+
+- Type: bool
+- Role: defines whether gravity is to be applied or not
+- Default: false
+
+### `g`
+
+- Type: float
+- Role: defines the gravitational acceleration
+- Default: 9.81
 
 ## Boundary and initial conditions
 
@@ -78,21 +110,24 @@ The successive over-relaxation algorithm (SOR) is a variant of the Gauss-Seidel 
 
 - Type: array of objects
 - Role: defines the boundary conditions
-- Default: `"closed"` if unspecified
+- Default: liquid cells on the boundaries
 
-The objects that are to be put in the array are to be according to the following model:
+This parameter defines the boundary conditions to apply to the borders of the domain. It should be given as an array of objects, each being of the form:
 
 ```json
 {
-	"start": [0, 0],
-	"end": [2, 0],
-	"type": "closed OR open",
-	"speed": 0.5,
-	"pressure": 6
+	"side": 0,
+	"type": 2.0
 }
 ```
 
-The `start` and `end` define the side on which the condition will apply. The `type`, which is to be either `"closed"` or `"open"`, defines if the side is an impermeable surface, or an open channel. If it is open, the `speed` and `pressure` parameters are necessary.
+The `side` parameter defines the side of the domain to which the object will apply. 0 is left, 1 is right, 2 is top, and 3 is down.
+
+The `type` parameter defines the type of cell that will be placed there. 0 is liquid, 1 is solid, 2 is air, and 3 is a forced flow.
+
+If a forced flow is set, then an additional field should be provided. It should either be `speed_x` or `speed_y`, based on which direction is normal to the face. The value should be the speed of the flow at that side.
+
+The code has not been tested either with a type 0 condition, or with a tangential speed applied on a type 3 side. Here be dragons.
 
 ### `ic_vx` and `ic_vy`
 
@@ -132,7 +167,7 @@ The objects are to be as:
 }
 ```
 
-The possible values can be either `0` or `1`, the former referring to liquid, and the latter to solid. Other values will for now cause an undefined behaviour.
+The possible values can be either `0`, `1`, or `2`. These values correspond to the same thign as the type in the `bc` field.
 
 ### `ic_cylinders`
 

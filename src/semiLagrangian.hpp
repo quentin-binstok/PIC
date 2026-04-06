@@ -3,10 +3,13 @@
 #define __SOLVER_SEMI_LAGRANGIAN__
 
 #include "nlohmann/json.hpp"
+#include <filesystem>
 #include <fstream>
 
 using json = nlohmann::json;
+namespace fs = std::filesystem;
 
-int solver_semi_lagrangian(json &data, std::ofstream &log_file);
+int solver_semi_lagrangian(json &data, std::ofstream &log_file,
+                           fs::path work_dir);
 
 #endif

@@ -7,8 +7,9 @@
 
 using json = nlohmann::json;
 enum CELL_TYPE { LIQUID, SOLID, AIR, DIRICHLET };
+
 /*
- @brief Applies some initial conditions to the scalar field
+ @brief Applies some initial condition "condition_name" to the domain
  @param scalar_field: the field to which apply the conditions (the domain)
  @param data: the full input json
  @param condition_name: the name of the initial condition in the json
@@ -17,14 +18,15 @@ enum CELL_TYPE { LIQUID, SOLID, AIR, DIRICHLET };
 int initialize_domain(scalar_field *field, json &data,
                       std::string condition_name, std::ofstream &log_file);
 
-// Initializes the speed fields
+/*
+ @brief Specialized function to apply initial conditions to the velocity fields
+*/
 int initialize_speed(scalar_field *field, scalar_field *dom, json &data,
                      std::string condition_name, std::ofstream &log_file);
 
-int create_circle(scalar_field *dom, std::string condition_name, json &data,
-                  std::ofstream &log_file);
-
-// Sets boundary conditions
+/*
+ @brief Applies speed & dom BCs
+*/
 int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom,
                        std::vector<float> &speed_condition, json &data,
                        std::string condition_name, std::ofstream &log_file);
