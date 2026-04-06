@@ -1166,6 +1166,10 @@ inline void refill_domain(particle_field* particles,
             else if (cell_type == LIQUID) {
 
                 if (refill && cell_density < particle_density) {
+<<<<<<< HEAD
+=======
+
+>>>>>>> f3dcc2d87781ea202f58691dc7bae854f2251925
                     fill_cell(i, j, particles, vx, vy, dom,
                               particle_density,
                               density, dt, rng, log_file);
