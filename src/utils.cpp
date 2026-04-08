@@ -5,6 +5,9 @@
 
 using json = nlohmann::json;
 
+void set_tangential_speeds(scalar_field *dom, scalar_field *vx,
+                           scalar_field *vy, std::ofstream &log_file);
+
 float interpolate_bilinear(float x, float y, float x1, float y1, float q11,
                            float q21, float q12, float q22, float Dx,
                            float Dy) {
@@ -262,20 +265,76 @@ int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
     }
 
     // Free-slip on left/right walls
-    for (int j = 0; j < vy_ny; j++) {
-        if (GET(dom, 0, vy_ny / 2) == SOLID)
-            SET(vy, 0, j, GET(vy, 1, j));
-        if (GET(dom, vy_nx - 1, vy_ny / 2) == SOLID)
-            SET(vy, vy_nx - 1, j, GET(vy, vy_nx - 2, j));
-    }
+    // for (int j = 0; j < vy_ny; j++) {
+    //     if (GET(dom, 0, vy_ny / 2) == SOLID)
+    //         SET(vy, 0, j, GET(vy, 1, j));
+    //     if (GET(dom, vy_nx - 1, vy_ny / 2) == SOLID)
+    //         SET(vy, vy_nx - 1, j, GET(vy, vy_nx - 2, j));
+    // }
 
-    // for vx on horizontal walls
-    for (int i = 0; i < vx_nx; i++) {
-        if (GET(dom, vx_nx / 2, 0) == SOLID)
-            SET(vx, i, 0, GET(vx, i, 1));
-        if (GET(dom, vx_nx / 2, vx_ny - 1) == SOLID)
-            SET(vx, i, vx_ny - 1, GET(vx, i, vx_ny - 2));
-    }
+    // // for vx on horizontal walls
+    // for (int i = 0; i < vx_nx; i++) {
+    //     if (GET(dom, vx_nx / 2, 0) == SOLID)
+    //         SET(vx, i, 0, GET(vx, i, 1));
+    //     if (GET(dom, vx_nx / 2, vx_ny - 1) == SOLID)
+    //         SET(vx, i, vx_ny - 1, GET(vx, i, vx_ny - 2));
+    // }
+
+    set_tangential_speeds(dom, vx, vy, log_file);
 
     return EXIT_SUCCESS;
+}
+
+/*
+ @brief sets the tangential speeds in solids and air equal to the one in liquid
+*/
+void set_tangential_speeds(scalar_field *dom, scalar_field *vx,
+                           scalar_field *vy, std::ofstream &log_file) {
+    LOG_INFO(log_file, "Setting tangential speeds");
+
+    int nx = dom->nx, ny = dom->ny;
+
+#pragma omp parallel for collapse(2)
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            float cell_type = GET(dom, i, j);
+
+            if (cell_type == SOLID) {
+                // Getting which cells are liquid
+                bool up = false, down = false, right = false, left = false;
+                if (i != 0 && GET(dom, i - 1, j) == LIQUID)
+                    left = true;
+                if (i != nx - 1 && GET(dom, i + 1, j) == LIQUID)
+                    right = true;
+                if (j != 0 && GET(dom, i, j - 1) == LIQUID)
+                    down = true;
+                if (j != ny - 1 && GET(dom, i, j + 1) == LIQUID)
+                    up = true;
+
+                // Computing the speeds
+                float horiz_speed = 0, vert_speed = 0;
+                if (up)
+                    horiz_speed += GET(vx, i, j + 1);
+                if (down)
+                    horiz_speed += GET(vx, i, j - 1);
+                if (left)
+                    vert_speed += GET(vy, i - 1, j);
+                if (right)
+                    vert_speed += GET(vy, i + 1, j);
+
+                // First to not divide by zero, second to enforce impermeability
+                if ((up || down) && !right) {
+                    // Take the mean
+                    horiz_speed /= (int)up + (int)down;
+
+                    SET(vx, i, j, horiz_speed);
+                }
+
+                if ((left || right) && !up) {
+                    vert_speed /= (int)left + (int)right;
+                    SET(vy, i, j, vert_speed);
+                }
+            }
+        }
+    }
 }
