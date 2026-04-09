@@ -17,6 +17,122 @@
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
+struct Metrics {
+    int step;
+    int particle_count;
+    std::vector<std::string> headers;
+    std::vector<float> values;
+};
+
+std::vector<std::string> build_headers(const json& metric_data) {
+    std::vector<std::string> headers;
+    for (int k = 0; k < (int)metric_data.size(); k++) {
+        std::string h = metric_data[k]["header"];
+        if (h == "volume")               
+            headers.push_back("volume");
+        else if (h == "free_surface_area") 
+            headers.push_back("free_surface_area");
+        else if (h == "depth")           
+            headers.push_back("depth_"+ std::to_string(metric_data[k]["idx"].get<int>()));
+        else if (h == "pressure")        
+            headers.push_back("pressure_"+ std::to_string(metric_data[k]["idx"][0].get<int>()) + "_" + std::to_string(metric_data[k]["idx"][1].get<int>()));
+        else if (h == "vx")              
+            headers.push_back("vx_"+ std::to_string(metric_data[k]["idx"][0].get<int>()) + "_" + std::to_string(metric_data[k]["idx"][1].get<int>()));
+        else if (h == "vy")              
+            headers.push_back("vy_"+ std::to_string(metric_data[k]["idx"][0].get<int>()) + "_" + std::to_string(metric_data[k]["idx"][1].get<int>()));
+        else if (h == "div")             
+            headers.push_back("div_"+ std::to_string(metric_data[k]["idx"][0].get<int>()) + "_" + std::to_string(metric_data[k]["idx"][1].get<int>()));
+        else if (h == "particles_solid")
+            headers.push_back("particles_solid");
+    }
+    return headers;
+}
+
+Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, scalar_field *vy, scalar_field *div, 
+                            float dx, int step, int nt, const json& metric_data, std::ofstream& log_file) {
+
+    LOG_INFO(log_file, "Computing metric ");
+    if (!metric_data.is_array()) {
+        LOG_WARN(log_file, "Metrics not given");
+        return Metrics();
+    }
+
+    Metrics m;
+    m.step = step;
+
+    for (int k = 0; k < (int)metric_data.size(); k++){
+        std::string h = metric_data[k]["header"];
+        if (h == "volume"){
+            m.values.push_back(volume(dom, dx));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Volume: " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "depth"){
+            m.values.push_back(depth(dom, metric_data[k]["idx"].get<int>(), dx));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Depth at (" << metric_data[k]["idx"][0].get<int>() <<"): " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "free_surface_area"){
+            m.values.push_back(free_surface_area(dom, dx));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Free surface area: " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "pressure") {
+            m.values.push_back(GET(p, metric_data[k]["idx"][0].get<int>(), metric_data[k]["idx"][1].get<int>()));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Pressure at (" << metric_data[k]["idx"][0].get<int>() << ", " << metric_data[k]["idx"][1].get<int>() << "): " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "vx") {
+            m.values.push_back(GET(vx, metric_data[k]["idx"][0].get<int>(), metric_data[k]["idx"][1].get<int>()));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "vx at (" << metric_data[k]["idx"][0].get<int>() << ", " << metric_data[k]["idx"][1].get<int>() << "): " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "vy") {
+            m.values.push_back(GET(vy, metric_data[k]["idx"][0].get<int>(), metric_data[k]["idx"][1].get<int>()));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "vy at (" << metric_data[k]["idx"][0].get<int>() << ", " << metric_data[k]["idx"][1].get<int>() << "): " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "div") {
+            m.values.push_back(GET(div, metric_data[k]["idx"][0].get<int>(), metric_data[k]["idx"][1].get<int>()));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Div at (" << metric_data[k]["idx"][0].get<int>() << ", " << metric_data[k]["idx"][1].get<int>() << "): " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "particles_solid") {
+            m.values.push_back(m.particle_count);
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Particles in solid: " << m.values.back() << "\n";
+            }
+        }
+        else {
+            std::cerr << "Warning: unknown metric '" << h << "', inserting 0\n";
+            m.values.push_back(0.0f);
+        }
+    }
+    return m;
+}
+
+void write_header(std::ofstream& f, const std::vector<std::string>& headers) {
+    f << "step";
+    for (const auto& h : headers)
+        f << "," << h;
+    f << "\n";
+}
+
+void write_metrics(std::ofstream& f, const Metrics& m) {
+    f << m.step;
+    for (const float v : m.values)
+        f << "," << std::setprecision(10) << std::scientific << v;
+    f << "\n";
+    f.flush();
+}
+
 /*
  @brief advects a single particle with the PIC scheme
  @param x, y: must contain the original position, will be overwritten
@@ -306,7 +422,7 @@ void remove_particle(particle_field *particles, int p) {
 /*
  @brief computes the density and removes particles in invalid places
 */
-inline int check_particles(particle_field *particles, scalar_field *dom,
+inline int check_particles(particle_field *particles, scalar_field *dom, Metrics& m,
                            std::vector<int> &density, std::ofstream &log_file) {
     LOG_INFO(log_file, "Updating particles")
 
@@ -315,6 +431,7 @@ inline int check_particles(particle_field *particles, scalar_field *dom,
     float dx = dom->dx;
 
     std::fill(density.begin(), density.end(), 0);
+    m.particle_count = 0;
 
     // Remove invalid particles
     int p = 0;
@@ -330,6 +447,7 @@ inline int check_particles(particle_field *particles, scalar_field *dom,
         // Check if the particle is out of bounds
         if (i < 0 || j < 0 || i >= nx || j >= ny) {
             remove_particle(particles, p);
+            m.particle_count++;
             continue;
         }
 
@@ -337,6 +455,7 @@ inline int check_particles(particle_field *particles, scalar_field *dom,
         float cell = GET(dom, i, j);
         if (cell == SOLID) {
             remove_particle(particles, p);
+            m.particle_count++;
             continue;
         }
 
@@ -444,17 +563,8 @@ inline void refill_domain(particle_field *particles, scalar_field *dom,
             else if (cell_type == LIQUID) {
 
                 if (refill && cell_density < particle_density) {
-<<<<<<< HEAD
-=======
-
-<<<<<<< HEAD
->>>>>>> f3dcc2d87781ea202f58691dc7bae854f2251925
-                    fill_cell(i, j, particles, vx, vy, dom,
-                              particle_density,
-=======
 #pragma omp critical
                     fill_cell(i, j, particles, vx, vy, dom, particle_density,
->>>>>>> origin/quentin
                               density, dt, rng, log_file);
                 } else if (cell_density < 1) {
                     SET(dom, i, j, AIR);
@@ -477,8 +587,9 @@ inline void refill_domain(particle_field *particles, scalar_field *dom,
  @brief the PIC/FLIP
  @param data: the whole json
  @param log_file: the log file
+ @param metrics_file: the metrics file
 */
-int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
+int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file, fs::path work_dir) {
     LOG_INFO(log_file, "Starting the PIC/FLIP solver");
 
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -603,6 +714,13 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
     // bool inverted = false;
     bool first_loop = true;
     std::cout << "Starting simulation" << std::endl;
+
+    Metrics m;
+    std::vector<std::string> headers = build_headers(data["metrics"]);
+    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, data["metrics"], log_file);
+    write_header(metrics_file, headers);
+    write_metrics(metrics_file, m);
+
     for (unsigned int i = 1; i < nt; i++) {
         // Logging and printing stuff
         log_file << "\n";
@@ -613,7 +731,7 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
             double sec_per_iter = seconds / i;
             std::cout << "\rRemaining computation time: "
                       << (nt - i) * sec_per_iter << "s\t";
-            std::cout << "Iteration " << i << "/" << nt;
+            std::cout << "Iteration " << i << "/" << nt << "\n";
             std::flush(std::cout);
         }
 
@@ -663,10 +781,13 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
         advect_pic(particles, vx, vy, dt, log_file);
 
         std::fill(density.begin(), density.end(), 0);
-        check_particles(particles, dom, density, log_file);
+        check_particles(particles, dom, m, density, log_file);
         refill_domain(particles, dom, vx, vy, density, particle_density, refill,
                       creation_rate, dt, rng, log_file);
 
+        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, data["metrics"], log_file);
+        write_metrics(metrics_file, m);
+        
         first_loop = false;
     }
 

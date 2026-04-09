@@ -1,22 +1,15 @@
 {
 	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 10,
+	"sampling_rate": 2,
 	"log_file": "log.txt",
-<<<<<<< HEAD
-	"flip": 1.0,
-
-	"grid": [200, 200],
-	"space_steps": 5e-3,
-	"nt": 1000,
-=======
-	"dir": "../dam_break_2_cylinders_FLIP",
-	"flip": 1,
+	"metrics_file": "metrics_FLIP_95.csv",
+	"dir": "../dam_break_FLIP_95",
+	"flip": 0.95,
 
 	"grid": [200, 200],
 	"space_steps": 5e-3,
 	"nt": 10000,
->>>>>>> origin/quentin
 	"delta_t": 0.001,
 	"tol": 1e-2,
 	"max_iter": 1e5,
@@ -28,12 +21,7 @@
 	"bc": [
 		{
 			"side": 0,
-<<<<<<< HEAD
-			"type": 3.0,
-			"speed_x": 5.0
-=======
 			"type": 1.0
->>>>>>> origin/quentin
 		},
 		{
 			"side": 1,
@@ -49,21 +37,7 @@
 		}
 	],
 
-	"ic_cylinders": [
-		{
-<<<<<<< HEAD
-			"center": [50, 100],
-			"radius": 15
-=======
-			"center": [50, 50],
-			"radius": 20
-		},
-		{
-			"center": [150, 50],
-			"radius": 20
->>>>>>> origin/quentin
-		}
-	],
+	"ic_cylinders": [],
 
 	"ic_cell": [
 		{
@@ -79,8 +53,28 @@
 	],
 
 	"particle_density": 25,
-	"creation_rate": 5000,
-	"particle_percentage_limit": 1.1,
+	"refill": false,
+
+	"metrics" : [
+		{
+			"header": "volume",
+			"print": true
+		},
+		{
+			"header": "free_surface_area",
+			"print": true
+		},
+		{
+			"header": "vx",
+			"idx": [10, 20],
+			"print": false
+		},
+		{
+			"header": "pressure",
+			"idx": [25, 30],
+			"print": false
+		}
+	],
 
 	"fields": ["temperature"],
 

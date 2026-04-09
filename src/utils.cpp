@@ -279,3 +279,54 @@ int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
 
     return EXIT_SUCCESS;
 }
+
+
+float volume(scalar_field *dom, float dx) {
+    int nx = dom->nx;
+    int ny = dom->ny;
+    float volume = 0;
+#pragma omp parallel for collapse(2) reduction(+ : volume)
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            if (GET(dom, i, j) == LIQUID) {
+                volume += dx * dx;
+            }
+        }
+    }
+    return volume;
+}
+
+float free_surface_area(scalar_field *dom, float dx) {
+    int nx = dom->nx;
+    int ny = dom->ny;
+    float area = 0;
+#pragma omp parallel for collapse(2) reduction(+ : area)
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            if (GET(dom, i, j) == LIQUID) {
+                if (i > 0 && GET(dom, i - 1, j) == AIR)
+                    area += dx;
+                if (i < nx - 1 && GET(dom, i + 1, j) == AIR)
+                    area += dx;
+                if (j > 0 && GET(dom, i, j - 1) == AIR)
+                    area += dx;
+                if (j < ny - 1 && GET(dom, i, j + 1) == AIR)
+                    area += dx;
+            }
+        }
+    }
+    return area;
+}
+
+float depth(scalar_field *dom, int idx, float dx) {
+    int ny = dom->ny;
+    int depth = 0;
+    for (int j = 1; j < ny; j++) {
+        if (GET(dom, idx, j) == LIQUID) {
+            depth++;
+        } else {
+            break;
+        }
+    }
+    return depth * dx;
+}

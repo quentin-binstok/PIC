@@ -69,4 +69,8 @@ int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
                      std::ofstream &log_file,
                      std::vector<float> &speed_condition);
 
+float volume(scalar_field *dom, float dx);
+float free_surface_area(scalar_field *dom, float dx);
+float depth(scalar_field *dom, int idx, float dx);
+
 #endif
