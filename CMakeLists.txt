@@ -8,7 +8,14 @@ INCLUDE(CMakePrintHelpers)
 
 # change "Debug" => "Release" for a faster executable (but less runtime checks)!
 IF(NOT CMAKE_BUILD_TYPE)
-    SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+    SET(CMAKE_BUILD_TYPE "Debug" CACHE STRING "" FORCE)
+ENDIF()
+
+IF (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Sanitizers enabled")
+
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=address)
 ENDIF()
 
 # enable C++17

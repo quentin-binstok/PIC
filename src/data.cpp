@@ -69,7 +69,7 @@ void scalar_field_free(scalar_field *field, std::ofstream &log_file) {
     LOG_INFO(log_file, "Freeing scalar field " << field->name);
     if (field->values)
         free(field->values);
-    free(field);
+    delete field;
 }
 
 // Initializes the structure

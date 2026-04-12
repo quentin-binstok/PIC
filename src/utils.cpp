@@ -1,9 +1,13 @@
+#include <iostream>
 #include "utils.hpp"
 #include "conditions.hpp"
 #include "data.hpp"
 #include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
+
+void set_tangential_speeds(scalar_field *dom, scalar_field *vx,
+                           scalar_field *vy, std::ofstream &log_file);
 
 float interpolate_bilinear(float x, float y, float x1, float y1, float q11,
                            float q21, float q12, float q22, float Dx,
@@ -262,20 +266,22 @@ int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
     }
 
     // Free-slip on left/right walls
-    for (int j = 0; j < vy_ny; j++) {
-        if (GET(dom, 0, vy_ny / 2) == SOLID)
-            SET(vy, 0, j, GET(vy, 1, j));
-        if (GET(dom, vy_nx - 1, vy_ny / 2) == SOLID)
-            SET(vy, vy_nx - 1, j, GET(vy, vy_nx - 2, j));
-    }
+    // for (int j = 0; j < vy_ny; j++) {
+    //     if (GET(dom, 0, vy_ny / 2) == SOLID)
+    //         SET(vy, 0, j, GET(vy, 1, j));
+    //     if (GET(dom, vy_nx - 1, vy_ny / 2) == SOLID)
+    //         SET(vy, vy_nx - 1, j, GET(vy, vy_nx - 2, j));
+    // }
 
-    // for vx on horizontal walls
-    for (int i = 0; i < vx_nx; i++) {
-        if (GET(dom, vx_nx / 2, 0) == SOLID)
-            SET(vx, i, 0, GET(vx, i, 1));
-        if (GET(dom, vx_nx / 2, vx_ny - 1) == SOLID)
-            SET(vx, i, vx_ny - 1, GET(vx, i, vx_ny - 2));
-    }
+    // // for vx on horizontal walls
+    // for (int i = 0; i < vx_nx; i++) {
+    //     if (GET(dom, vx_nx / 2, 0) == SOLID)
+    //         SET(vx, i, 0, GET(vx, i, 1));
+    //     if (GET(dom, vx_nx / 2, vx_ny - 1) == SOLID)
+    //         SET(vx, i, vx_ny - 1, GET(vx, i, vx_ny - 2));
+    // }
+
+    set_tangential_speeds(dom, vx, vy, log_file);
 
     return EXIT_SUCCESS;
 }
@@ -329,4 +335,166 @@ float depth(scalar_field *dom, int idx, float dx) {
         }
     }
     return depth * dx;
+}
+/*
+ @brief sets the tangential speeds in solids and air equal to the one in liquid
+*/
+void set_tangential_speeds(scalar_field *dom, scalar_field *vx,
+                           scalar_field *vy, std::ofstream &log_file) {
+    LOG_INFO(log_file, "Setting tangential speeds");
+
+    int nx = dom->nx, ny = dom->ny;
+
+#pragma omp parallel for collapse(2)
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            float cell_type = GET(dom, i, j);
+
+            if (cell_type == SOLID) {
+                // Getting which cells are liquid
+                bool up = false, down = false, right = false, left = false;
+                if (i != 0 && GET(dom, i - 1, j) == LIQUID)
+                    left = true;
+                if (i != nx - 1 && GET(dom, i + 1, j) == LIQUID)
+                    right = true;
+                if (j != 0 && GET(dom, i, j - 1) == LIQUID)
+                    down = true;
+                if (j != ny - 1 && GET(dom, i, j + 1) == LIQUID)
+                    up = true;
+
+                // Computing the speeds
+                float horiz_speed = 0, vert_speed = 0;
+                if (up)
+                    horiz_speed += GET(vx, i, j + 1);
+                if (down)
+                    horiz_speed += GET(vx, i, j - 1);
+                if (left)
+                    vert_speed += GET(vy, i - 1, j);
+                if (right)
+                    vert_speed += GET(vy, i + 1, j);
+
+                // First to not divide by zero, second to enforce impermeability
+                if ((up || down) && !right) {
+                    // Take the mean
+                    horiz_speed /= (int)up + (int)down;
+
+                    SET(vx, i, j, horiz_speed);
+                }
+
+                if ((left || right) && !up) {
+                    vert_speed /= (int)left + (int)right;
+                    SET(vy, i, j, vert_speed);
+                }
+            }
+        }
+    }
+}
+
+std::vector<std::string> build_headers(const json& metric_data) {
+    std::vector<std::string> headers;
+    for (int k = 0; k < (int)metric_data.size(); k++) {
+        std::string h = metric_data[k]["header"];
+        if (h == "volume")               
+            headers.push_back("volume");
+        else if (h == "free_surface_area") 
+            headers.push_back("free_surface_area");
+        else if (h == "depth")           
+            headers.push_back("depth_"+ std::to_string(metric_data[k]["idx"].get<int>()));
+        else if (h == "pressure")        
+            headers.push_back("pressure_"+ std::to_string(metric_data[k]["idx"][0].get<int>()) + "_" + std::to_string(metric_data[k]["idx"][1].get<int>()));
+        else if (h == "vx")              
+            headers.push_back("vx_"+ std::to_string(metric_data[k]["idx"][0].get<int>()) + "_" + std::to_string(metric_data[k]["idx"][1].get<int>()));
+        else if (h == "vy")              
+            headers.push_back("vy_"+ std::to_string(metric_data[k]["idx"][0].get<int>()) + "_" + std::to_string(metric_data[k]["idx"][1].get<int>()));
+        else if (h == "div")             
+            headers.push_back("div_"+ std::to_string(metric_data[k]["idx"][0].get<int>()) + "_" + std::to_string(metric_data[k]["idx"][1].get<int>()));
+        else if (h == "particles_solid")
+            headers.push_back("particles_solid");
+    }
+    return headers;
+}
+
+Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, scalar_field *vy, scalar_field *div, 
+                            float dx, int step, int nt, const json& metric_data, std::ofstream& log_file) {
+
+    LOG_INFO(log_file, "Computing metric ");
+    if (!metric_data.is_array()) {
+        LOG_WARN(log_file, "Metrics not given");
+        return Metrics();
+    }
+
+    Metrics m;
+    m.step = step;
+
+    for (int k = 0; k < (int)metric_data.size(); k++){
+        std::string h = metric_data[k]["header"];
+        if (h == "volume"){
+            m.values.push_back(volume(dom, dx));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Volume: " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "depth"){
+            m.values.push_back(depth(dom, metric_data[k]["idx"].get<int>(), dx));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Depth at (" << metric_data[k]["idx"][0].get<int>() <<"): " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "free_surface_area"){
+            m.values.push_back(free_surface_area(dom, dx));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Free surface area: " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "pressure") {
+            m.values.push_back(GET(p, metric_data[k]["idx"][0].get<int>(), metric_data[k]["idx"][1].get<int>()));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Pressure at (" << metric_data[k]["idx"][0].get<int>() << ", " << metric_data[k]["idx"][1].get<int>() << "): " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "vx") {
+            m.values.push_back(GET(vx, metric_data[k]["idx"][0].get<int>(), metric_data[k]["idx"][1].get<int>()));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "vx at (" << metric_data[k]["idx"][0].get<int>() << ", " << metric_data[k]["idx"][1].get<int>() << "): " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "vy") {
+            m.values.push_back(GET(vy, metric_data[k]["idx"][0].get<int>(), metric_data[k]["idx"][1].get<int>()));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "vy at (" << metric_data[k]["idx"][0].get<int>() << ", " << metric_data[k]["idx"][1].get<int>() << "): " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "div") {
+            m.values.push_back(GET(div, metric_data[k]["idx"][0].get<int>(), metric_data[k]["idx"][1].get<int>()));
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Div at (" << metric_data[k]["idx"][0].get<int>() << ", " << metric_data[k]["idx"][1].get<int>() << "): " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "particles_solid") {
+            m.values.push_back(m.particle_count);
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Particles in solid: " << m.values.back() << "\n";
+            }
+        }
+        else {
+            std::cerr << "Warning: unknown metric '" << h << "', inserting 0\n";
+            m.values.push_back(0.0f);
+        }
+    }
+    return m;
+}
+
+void write_header(std::ofstream& f, const std::vector<std::string>& headers) {
+    f << "step";
+    for (const auto& h : headers)
+        f << "," << h;
+    f << "\n";
+}
+
+void write_metrics(std::ofstream& f, const Metrics& m) {
+    f << m.step;
+    for (const float v : m.values)
+        f << "," << std::setprecision(10) << std::scientific << v;
+    f << "\n";
+    f.flush();
 }

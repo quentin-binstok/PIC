@@ -1,15 +1,15 @@
 {
-	"solver": "pic",
+	"solver": "apic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 2,
+	"sampling_rate": 5,
 	"log_file": "log.txt",
-	"metrics_file": "metrics_FLIP_95.csv",
-	"dir": "../dam_break_FLIP_95",
-	"flip": 0.95,
+	"metrics_file": "metrics_APIC.csv",
+	"dir": "../dam_break_PIC_95",
+	"flip": 1.0,
 
-	"grid": [200, 200],
+	"grid": [100, 100],
 	"space_steps": 5e-3,
-	"nt": 10000,
+	"nt": 5000,
 	"delta_t": 0.001,
 	"tol": 1e-2,
 	"max_iter": 1e5,
@@ -42,12 +42,12 @@
 	"ic_cell": [
 		{
 			"tl": [1, 1],
-			"br": [198, 199],
+			"br": [98, 99],
 			"value": 2.0
 		},
 		{
 			"tl": [1, 1],
-			"br": [100, 100],
+			"br": [50, 50],
 			"value": 0.0
 		}
 	],

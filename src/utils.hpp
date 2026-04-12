@@ -16,6 +16,13 @@
 
 using json = nlohmann::json;
 
+struct Metrics {
+    int step;
+    int particle_count;
+    std::vector<std::string> headers;
+    std::vector<float> values;
+};
+
 /*
  @brief Bilinear intepolation of q
  @param x, y: the absolute coordinates at which we want q
@@ -72,5 +79,13 @@ int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
 float volume(scalar_field *dom, float dx);
 float free_surface_area(scalar_field *dom, float dx);
 float depth(scalar_field *dom, int idx, float dx);
+
+void write_metrics(std::ofstream& f, const Metrics& m);
+void write_header(std::ofstream& f, const std::vector<std::string>& headers);
+Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, scalar_field *vy, scalar_field *div, 
+                            float dx, int step, int nt, const json& metric_data, std::ofstream& log_file);
+std::vector<std::string> build_headers(const json& metric_data);
+
+
 
 #endif
