@@ -348,6 +348,11 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
 
         advect(particles, vx, vy, dt, log_file);
 
+        std::fill(density.begin(), density.end(), 0);
+        check_particles(particles, dom, m, density, log_file);
+        refill_domain(particles, dom, vx, vy, density, particle_density, refill,
+                     creation_rate, dt, rng, log_file);
+
         if (gravity)
             apply_gravity(particles, g, dt);
 
@@ -375,11 +380,6 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
         grid_to_particles(particles, vx, vy, log_file);
-
-        std::fill(density.begin(), density.end(), 0);
-        check_particles(particles, dom, m, density, log_file);
-        refill_domain(particles, dom, vx, vy, density, particle_density, refill,
-                     creation_rate, dt, rng, log_file);
         
         // save files
         if (sampling_rate && !(i % sampling_rate)) {
