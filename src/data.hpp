@@ -51,6 +51,7 @@ typedef struct _particle_field {
     int next_id;
     std::vector<float> xyz; // soit 2D soit 3D, each particle's position aligned
     std::vector<float> velocity; // idem
+    std::vector<float> T;
     std::vector<int> id;
     std::vector<float> B;
 } particle_field;
@@ -65,8 +66,6 @@ struct RNG {
         : gen(std::random_device{}()), jitter(-0.5f * dx, 0.5f * dx),
           prob(0.0f, 1.0f), birth(0.0f, dt) {}
 };
-
-
 
 /*
  @brief Initialises a scalar field

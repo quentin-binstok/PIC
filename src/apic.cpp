@@ -1,61 +1,58 @@
 #include "conditions.hpp"
 #include "data.hpp"
 #include "nlohmann/json.hpp"
-#include "poisson.hpp"
-#include "utils.hpp"
 #include "particules.hpp"
+#include "poisson.hpp"
+#include "thermal.hpp"
+#include "utils.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <ostream>
-#include <random>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-
-inline int particles_to_grid(
-    particle_field *particles, float mass,
-    scalar_field *vx, scalar_field *vy,
-    scalar_field *mass_x, scalar_field *mass_y,  // NEW: grid mass per face
-    std::ofstream &log_file)
-{
+inline int particles_to_grid(particle_field *particles, float mass,
+                             scalar_field *vx, scalar_field *vy,
+                             scalar_field *mass_x,
+                             scalar_field *mass_y, // NEW: grid mass per face
+                             std::ofstream &log_file) {
     LOG_INFO(log_file, "APIC P->G transfer");
 
     int nx = vx->nx, ny = vx->ny;
     float dx = vx->dx;
-    float D_inv = 4.0f / (dx * dx); // assume each particle in the center 
+    float D_inv = 4.0f / (dx * dx); // assume each particle in the center
     float mp = mass;
 
     // Zero all grid fields
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
-            SET(vx,      i, j, 0);
-            SET(vy,      i, j, 0);
-            SET(mass_x, i, j, 0);  
-            SET(mass_y, i, j, 0);  
+            SET(vx, i, j, 0);
+            SET(vy, i, j, 0);
+            SET(mass_x, i, j, 0);
+            SET(mass_y, i, j, 0);
         }
     }
 
 #pragma omp parallel for
     for (int k = 0; k < particles->N; k++) {
-        float x  = particles->xyz[2 * k];
-        float y  = particles->xyz[2 * k + 1];
+        float x = particles->xyz[2 * k];
+        float y = particles->xyz[2 * k + 1];
 
-        float u = particles->velocity[2 * k];    
-        float v = particles->velocity[2 * k + 1];  
+        float u = particles->velocity[2 * k];
+        float v = particles->velocity[2 * k + 1];
 
         // computed previous time step
-        float B00 = particles->B[4 * k];      
-        float B01 = particles->B[4 * k + 1];  
-        float B10 = particles->B[4 * k + 2];  
-        float B11 = particles->B[4 * k + 3];  
+        float B00 = particles->B[4 * k];
+        float B01 = particles->B[4 * k + 1];
+        float B10 = particles->B[4 * k + 2];
+        float B11 = particles->B[4 * k + 3];
 
         // --- x-faces: staggered in x, collocated in y ---
         int i_vx = std::max(0, (int)(x / dx - 0.5)); // matches get_speed
@@ -64,11 +61,11 @@ inline int particles_to_grid(
             for (int i = i_vx; i < std::min(nx, i_vx + 2); i++) {
 
                 float kern = kernel((x - (i + 0.5f) * dx) / dx) *
-                             kernel((y -  j          * dx) / dx);
+                             kernel((y - j * dx) / dx);
 
                 // (x_ia - x_p)
                 float ox = (i + 0.5f) * dx - x;
-                float oy =  j         * dx - y;
+                float oy = j * dx - y;
 
                 // Affine correction
                 float affine = D_inv * (B00 * ox + B01 * oy);
@@ -90,10 +87,10 @@ inline int particles_to_grid(
         for (int j = j_vy; j < std::min(ny, j_vy + 2); j++) {
             for (int i = i_vy; i < std::min(nx, i_vy + 2); i++) {
 
-                float kern = kernel((x -  i         * dx) / dx) *
+                float kern = kernel((x - i * dx) / dx) *
                              kernel((y - (j + 0.5f) * dx) / dx);
 
-                float ox =  i         * dx - x;
+                float ox = i * dx - x;
                 float oy = (j + 0.5f) * dx - y;
 
                 float affine = D_inv * (B10 * ox + B11 * oy);
@@ -114,19 +111,18 @@ inline int particles_to_grid(
         for (int i = 0; i < nx; i++) {
             float mx = GET(mass_x, i, j);
             float my = GET(mass_y, i, j);
-            if (mx > 0) SET(vx, i, j, GET(vx, i, j) / mx);
-            if (my > 0) SET(vy, i, j, GET(vy, i, j) / my);
+            if (mx > 0)
+                SET(vx, i, j, GET(vx, i, j) / mx);
+            if (my > 0)
+                SET(vy, i, j, GET(vy, i, j) / my);
         }
     }
 
     return EXIT_SUCCESS;
 }
 
-inline int grid_to_particles(
-    particle_field *particles,
-    scalar_field *vx, scalar_field *vy,
-    std::ofstream &log_file)
-{
+inline int grid_to_particles(particle_field *particles, scalar_field *vx,
+                             scalar_field *vy, std::ofstream &log_file) {
     LOG_INFO(log_file, "APIC G->P transfer");
 
     int nx = vx->nx, ny = vx->ny;
@@ -134,13 +130,13 @@ inline int grid_to_particles(
 
 #pragma omp parallel for
     for (int k = 0; k < particles->N; k++) {
-        float x  = particles->xyz[2 * k];
-        float y  = particles->xyz[2 * k + 1];
+        float x = particles->xyz[2 * k];
+        float y = particles->xyz[2 * k + 1];
 
         float new_u = 0, new_v = 0;
 
-        float B00 = 0, B01 = 0;  
-        float B10 = 0, B11 = 0;  
+        float B00 = 0, B01 = 0;
+        float B10 = 0, B11 = 0;
 
         int i_vx = std::max(0, (int)(x / dx - 0.5f));
         int j_vx = std::max(0, (int)(y / dx));
@@ -148,17 +144,17 @@ inline int grid_to_particles(
             for (int i = i_vx; i < std::min(nx, i_vx + 2); i++) {
 
                 float kern = kernel((x - (i + 0.5f) * dx) / dx) *
-                             kernel((y -  j          * dx) / dx);
-                float vi   = GET(vx, i, j);
+                             kernel((y - j * dx) / dx);
+                float vi = GET(vx, i, j);
 
-                // corresponds to (x_ia - x_p) 
+                // corresponds to (x_ia - x_p)
                 float ox = (i + 0.5f) * dx - x;
-                float oy =  j         * dx - y;
+                float oy = j * dx - y;
 
                 // Eq 8
                 new_u += kern * vi;
 
-                // Eq 9 
+                // Eq 9
                 B00 += kern * vi * ox;
                 B01 += kern * vi * oy;
             }
@@ -169,11 +165,11 @@ inline int grid_to_particles(
         for (int j = j_vy; j < std::min(ny, j_vy + 2); j++) {
             for (int i = i_vy; i < std::min(nx, i_vy + 2); i++) {
 
-                float kern = kernel((x -  i         * dx) / dx) *
+                float kern = kernel((x - i * dx) / dx) *
                              kernel((y - (j + 0.5f) * dx) / dx);
-                float vi   = GET(vy, i, j);
+                float vi = GET(vy, i, j);
 
-                float ox =  i         * dx - x;
+                float ox = i * dx - x;
                 float oy = (j + 0.5f) * dx - y;
 
                 new_v += kern * vi;
@@ -183,10 +179,10 @@ inline int grid_to_particles(
             }
         }
 
-        particles->velocity[2 * k]     = new_u;
+        particles->velocity[2 * k] = new_u;
         particles->velocity[2 * k + 1] = new_v;
 
-        particles->B[4 * k]     = B00;
+        particles->B[4 * k] = B00;
         particles->B[4 * k + 1] = B01;
         particles->B[4 * k + 2] = B10;
         particles->B[4 * k + 3] = B11;
@@ -201,7 +197,8 @@ inline int grid_to_particles(
  @param log_file: the log file
  @param metrics_file: the metrics file
 */
-int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file, fs::path work_dir) {
+int solver_apic(json &data, std::ofstream &log_file,
+                std::ofstream &metrics_file, fs::path work_dir) {
     LOG_INFO(log_file, "Starting the APIC solver");
 
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -224,6 +221,11 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
     bool refill = data.value("refill", false);
     bool gravity = data.value("gravity", false);
     float g = data.value("g", 9.81);
+    float init_temp = data.value("init_temperature", 20);
+    float T0 = data.value("T0", 20);
+    float beta = data.value("beta", 0.01);
+    float c = data.value("c", 4.186);
+    float k = data.value("k", 1);
     RNG rng(dx, dt);
     float mass = rho * (dx * dx) / particle_density;
 
@@ -270,6 +272,14 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
     scalar_field *temp_p = scalar_field_copy(p, log_file);
 
+    scalar_field *T =
+        scalar_field_init("Temperature", nx, ny, 0, 0, dx, log_file);
+    scalar_field *T_temp = scalar_field_copy(T, log_file);
+    scalar_field *kern_sum_T =
+        scalar_field_init("kern_sum_T", nx, ny, 0, 0, dx, log_file);
+    std::vector<bool> T_changed;
+    T_changed.resize(nx * ny);
+
     scalar_field *mass_x =
         scalar_field_init("mass_x", nx, ny, 0, 0, dx, log_file);
     scalar_field *mass_y =
@@ -282,6 +292,7 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
     }
 
     std::vector<float> speed_condition;
+    therm_bc *therm_bcs = (therm_bc *)malloc(sizeof(therm_bc));
 
     // Applying the initial conditions
     initialize_speed(vx, dom, data, "ic_vx", log_file);
@@ -289,12 +300,18 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
     boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
     initialize_domain(dom, data, "ic_cell", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
+    build_thermal_bc(therm_bcs, data, log_file);
+
+#pragma omp parallel for collapse(2)
+    for (int j = 0; j < (int)ny; j++)
+        for (int i = 0; i < (int)nx; i++)
+            SET(T, i, j, init_temp);
 
     // Initializing the particles
     particle_field *particles = particle_field_init_2D(
         "particles", nx * ny * particle_density, log_file);
-    initialize_particles(particles, dom, vx, vy, data["particle_density"],
-                              log_file);
+    initialize_particles(particles, dom, vx, vy, T, data["particle_density"],
+                         log_file);
 
     // Manifests
     write_manifest_vtk("particles", dt, nt, sampling_rate, 1, 1, log_file,
@@ -311,6 +328,8 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
                        work_dir);
     write_manifest_vtk(dom->name, dt, nt, sampling_rate, 1, 0, log_file,
                        work_dir);
+    write_manifest_vtk(T->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
 
     // Initial state
     write_scalar_vtk(vx, 0, 0, log_file, work_dir);
@@ -318,6 +337,7 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
     write_scalar_vtk(p, 0, 0, log_file, work_dir);
     write_scalar_vtk(div, 0, 0, log_file, work_dir);
     write_scalar_vtk(dom, 0, 0, log_file, work_dir);
+    write_scalar_vtk(T, 0, 0, log_file, work_dir);
 
     std::vector<int> density(nx * ny, 0);
 
@@ -328,7 +348,8 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
 
     Metrics m;
     std::vector<std::string> headers = build_headers(data["metrics"]);
-    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, data["metrics"], log_file);
+    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, data["metrics"],
+                        log_file);
     write_header(metrics_file, headers);
     write_metrics(metrics_file, m);
 
@@ -350,16 +371,15 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
 
         std::fill(density.begin(), density.end(), 0);
         check_particles(particles, dom, m, density, log_file);
-        refill_domain(particles, dom, vx, vy, density, particle_density, refill,
-                     creation_rate, dt, rng, log_file);
+        refill_domain(particles, dom, vx, vy, T, density, particle_density,
+                      refill, creation_rate, dt, rng, log_file);
 
         if (gravity)
-            apply_gravity(particles, g, dt);
+            apply_gravity(particles, g, dt, beta, T0);
 
-        particles_to_grid(particles, mass, vx, vy, mass_x, mass_y,
-                                log_file);
-        
-        
+        particles_to_grid(particles, mass, vx, vy, mass_x, mass_y, log_file);
+        particles_temp_to_grid(particles, T, T_changed, kern_sum_T, log_file);
+
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
         if (data["iteration_algo"] == "Jacobi")
@@ -372,6 +392,9 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
             return EXIT_FAILURE;
         }
 
+        apply_thermal_eq(T, T_temp, therm_bcs, dt, c, rho, k, tol, max_iter,
+                         log_file);
+
         project_velocity(p, vx, vy, dom, dx, dt, rho, log_file,
                          speed_condition);
 
@@ -380,7 +403,8 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
         grid_to_particles(particles, vx, vy, log_file);
-        
+        grid_temp_to_particles(particles, T, log_file);
+
         // save files
         if (sampling_rate && !(i % sampling_rate)) {
             write_scalar_vtk(vx, i, 0, log_file, work_dir);
@@ -388,13 +412,15 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
             write_scalar_vtk(p, i, 0, log_file, work_dir);
             write_scalar_vtk(div, i, 0, log_file, work_dir);
             write_scalar_vtk(dom, i, 0, log_file, work_dir);
+            write_scalar_vtk(T, i, 0, log_file, work_dir);
 
             write_particles_vtp(particles, i, 0, 2, log_file, work_dir);
         }
 
-        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, data["metrics"], log_file);
+        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, data["metrics"],
+                            log_file);
         write_metrics(metrics_file, m);
-        
+
         first_loop = false;
     }
 
@@ -407,11 +433,15 @@ int solver_apic(json &data, std::ofstream &log_file, std::ofstream &metrics_file
     scalar_field_free(temp_vx, log_file);
     scalar_field_free(temp_vy, log_file);
     scalar_field_free(temp_p, log_file);
+    scalar_field_free(T, log_file);
+    scalar_field_free(T_temp, log_file);
 
     scalar_field_free(mass_x, log_file);
     scalar_field_free(mass_y, log_file);
+    scalar_field_free(kern_sum_T, log_file);
 
     delete particles;
+    free(therm_bcs);
 
     auto t1 = std::chrono::high_resolution_clock::now();
     double seconds = std::chrono::duration<double>(t1 - t0).count();

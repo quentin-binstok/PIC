@@ -1,18 +1,15 @@
-#include "data.hpp"
-#include "nlohmann/json.hpp"
-#include "poisson.hpp"
-#include "utils.hpp"
 #include "conditions.hpp"
-
-
+#include "data.hpp"
+#include "thermal.hpp"
+#include "utils.hpp"
 
 /*
  @brief advects a single particle with the APIC scheme
  @param x, y: must contain the original position, will be overwritten
 */
 void advect_single_particle(float *x, float *y, scalar_field *vx,
-                                   scalar_field *vy, float dt,
-                                   std::ofstream &log_file) {
+                            scalar_field *vy, float dt,
+                            std::ofstream &log_file) {
 
     // Three-stage third-order RK scheme
     float init_x = *x;
@@ -43,8 +40,8 @@ void advect_single_particle(float *x, float *y, scalar_field *vx,
 /*
  @brief avects the particles based on their velocity, using the APIC scheme
 */
-int advect(particle_field *particles, scalar_field *vx,
-                      scalar_field *vy, float dt, std::ofstream &log_file) {
+int advect(particle_field *particles, scalar_field *vx, scalar_field *vy,
+           float dt, std::ofstream &log_file) {
     LOG_INFO(log_file, "Advecting particles");
 
 #pragma omp parallel for
@@ -90,20 +87,21 @@ float kernel(float r) {
 }
 
 // Kinematic application of gravity
-void apply_gravity(particle_field *particles, float g, float dt) {
+void apply_gravity(particle_field *particles, float g, float dt, float beta,
+                   float T0) {
 #pragma omp parallel for
     for (int k = 0; k < particles->N; k++) {
-        particles->velocity[2 * k + 1] -= g * dt;
+        particles->velocity[2 * k + 1] -=
+            (1 - beta * (particles->T[k] - T0)) * g * dt;
     }
 }
 
 /*
  @brief Initializes the particles on the grid
 */
-void initialize_particles(particle_field *particles,
-                                     scalar_field *dom, scalar_field *vx,
-                                     scalar_field *vy, int density,
-                                     std::ofstream &log_file) {
+void initialize_particles(particle_field *particles, scalar_field *dom,
+                          scalar_field *vx, scalar_field *vy, scalar_field *T,
+                          int density, std::ofstream &log_file) {
     // Initialization of stuff
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -117,7 +115,7 @@ void initialize_particles(particle_field *particles,
     particles->xyz.resize(2 * density * nx * ny);
     particles->velocity.resize(2 * density * nx * ny);
 
-#pragma omp parallel for collapse(2)
+    // DO NOT PARALLELIZE, IT BREAKS EVERYTHING
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
             float cell = GET(dom, i, j);
@@ -125,9 +123,8 @@ void initialize_particles(particle_field *particles,
             if (cell != SOLID && cell != AIR) {
                 for (int k = 0; k < density; k++) {
                     float x, y;
-#pragma omp critical
+
                     x = i * dx + dist(gen);
-#pragma omp critical
                     y = j * dx + dist(gen);
                     particles->xyz[2 * current_id] = x;
                     particles->xyz[2 * current_id + 1] = y;
@@ -139,12 +136,29 @@ void initialize_particles(particle_field *particles,
                     particles->velocity[2 * current_id] = v_x;
                     particles->velocity[2 * current_id + 1] = v_y;
 
-#pragma omp atomic
+                    float temp;
+                    int x_1, x_2, y_1, y_2;
+                    x_1 = (int)(x / dx);
+                    x_1 = std::max(0, x_1);
+                    x_1 = std::min(x_1, T->nx - 2);
+                    x_2 = std::min(T->nx - 1, x_1 + 1);
+
+                    y_1 = std::max(0, (int)(y / dx));
+                    y_1 = std::min(y_1, T->ny - 2);
+                    y_2 = std::min(y_1 + 1, T->ny - 1);
+
+                    float x0 = x_1 * dx;
+                    float y0 = y_1 * dx;
+                    temp = interpolate_bilinear(
+                        x, y, x0, y0, GET(T, x_1, y_1), GET(T, x_2, y_1),
+                        GET(T, x_1, y_2), GET(T, x_2, y_2), dx, dx);
+
+                    particles->T[current_id] = temp;
+
                     current_id++;
                 }
 
             } else {
-#pragma omp atomic
                 nb_not_fluid_cases++;
             }
         }
@@ -155,11 +169,14 @@ void initialize_particles(particle_field *particles,
     particles->next_id = current_id; // next to assign = current_id
     particles->xyz.resize(2 * current_id);
     particles->velocity.resize(2 * current_id);
-    particles->B.resize(4*current_id);
+    particles->B.resize(4 * current_id);
 
     // Fill ids properly
     particles->id.resize(current_id);
+
     std::iota(particles->id.begin(), particles->id.end(), 0);
+
+    particles->T.resize(current_id);
 }
 
 // Removes a single particle of index p (not ID!)
@@ -172,15 +189,16 @@ void remove_particle(particle_field *particles, int p) {
         std::swap(particles->xyz[2 * p + 1], particles->xyz[2 * last + 1]);
 
         std::swap(particles->velocity[2 * p], particles->velocity[2 * last]);
-        std::swap(particles->velocity[2 * p + 1], particles->velocity[2 * last + 1]);
+        std::swap(particles->velocity[2 * p + 1],
+                  particles->velocity[2 * last + 1]);
 
         std::swap(particles->B[4 * p], particles->B[4 * last]);
         std::swap(particles->B[4 * p + 1], particles->B[4 * last + 1]);
         std::swap(particles->B[4 * p + 2], particles->B[4 * last + 2]);
         std::swap(particles->B[4 * p + 3], particles->B[4 * last + 3]);
 
-
         std::swap(particles->id[p], particles->id[last]);
+        std::swap(particles->T[p], particles->T[last]);
     }
 
     particles->xyz.pop_back();
@@ -192,6 +210,7 @@ void remove_particle(particle_field *particles, int p) {
     particles->B.pop_back();
     particles->B.pop_back();
     particles->id.pop_back();
+    particles->T.pop_back();
 
     particles->N--;
 }
@@ -199,8 +218,8 @@ void remove_particle(particle_field *particles, int p) {
 /*
  @brief computes the density and removes particles in invalid places
 */
-int check_particles(particle_field *particles, scalar_field *dom, Metrics& m,
-                           std::vector<int> &density, std::ofstream &log_file) {
+int check_particles(particle_field *particles, scalar_field *dom, Metrics &m,
+                    std::vector<int> &density, std::ofstream &log_file) {
     LOG_INFO(log_file, "Updating particles")
 
     int nx = dom->nx;
@@ -247,9 +266,9 @@ int check_particles(particle_field *particles, scalar_field *dom, Metrics& m,
  @brief fills the cell (i,j) with particles until imposed_density
 */
 void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
-                      scalar_field *vy, scalar_field *dom, int imposed_density,
-                      std::vector<int> &density, float dt, RNG &rng,
-                      std::ofstream &log_file) {
+               scalar_field *vy, scalar_field *dom, scalar_field *T,
+               int imposed_density, std::vector<int> &density, float dt,
+               RNG &rng, std::ofstream &log_file) {
     int nx = vx->nx;
     int ny = vx->ny;
     float dx = vx->dx;
@@ -286,6 +305,8 @@ void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
         if (GET(dom, fi, fj) == SOLID)
             continue;
 
+        float temp = interp_temp(x, y, dx, T);
+
         // Add particle
         particles->xyz.push_back(x);
         particles->xyz.push_back(y);
@@ -299,6 +320,7 @@ void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
         particles->B.push_back(0);
 
         particles->id.push_back(particles->next_id++);
+        particles->T.push_back(temp);
 
         // Optional: remove if you switch to size()
         particles->N++;
@@ -312,10 +334,10 @@ void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
  @brief refills the domain, change cell types
 */
 void refill_domain(particle_field *particles, scalar_field *dom,
-                          scalar_field *vx, scalar_field *vy,
-                          std::vector<int> &density, int particle_density,
-                          bool refill, float creation_rate, float dt, RNG &rng,
-                          std::ofstream &log_file) {
+                   scalar_field *vx, scalar_field *vy, scalar_field *T,
+                   std::vector<int> &density, int particle_density, bool refill,
+                   float creation_rate, float dt, RNG &rng,
+                   std::ofstream &log_file) {
     LOG_INFO(log_file, "Refilling domain");
 
     int nx = dom->nx;
@@ -337,8 +359,8 @@ void refill_domain(particle_field *particles, scalar_field *dom,
                 int target_number = (int)n;
 
 #pragma omp critical
-                fill_cell(i, j, particles, vx, vy, dom, target_number, density,
-                          dt, rng, log_file);
+                fill_cell(i, j, particles, vx, vy, dom, T, target_number,
+                          density, dt, rng, log_file);
             }
 
             // --- LIQUID cells ---
@@ -346,8 +368,8 @@ void refill_domain(particle_field *particles, scalar_field *dom,
 
                 if (refill && cell_density < particle_density) {
 #pragma omp critical
-                    fill_cell(i, j, particles, vx, vy, dom, particle_density, density,
-                              dt, rng, log_file);
+                    fill_cell(i, j, particles, vx, vy, dom, T, particle_density,
+                              density, dt, rng, log_file);
                 } else if (cell_density < 1) {
                     SET(dom, i, j, AIR);
                 }
