@@ -225,7 +225,7 @@ int solver_apic(json &data, std::ofstream &log_file,
     float T0 = data.value("T0", 20);
     float beta = data.value("beta", 0.01);
     float c = data.value("c", 4.186);
-    float k = data.value("k", 1);
+    float k = data.value("k", 1.0f);
     RNG rng(dx, dt);
     float mass = rho * (dx * dx) / particle_density;
 
@@ -277,8 +277,6 @@ int solver_apic(json &data, std::ofstream &log_file,
     scalar_field *T_temp = scalar_field_copy(T, log_file);
     scalar_field *kern_sum_T =
         scalar_field_init("kern_sum_T", nx, ny, 0, 0, dx, log_file);
-    std::vector<bool> T_changed;
-    T_changed.resize(nx * ny);
 
     scalar_field *mass_x =
         scalar_field_init("mass_x", nx, ny, 0, 0, dx, log_file);
@@ -378,7 +376,7 @@ int solver_apic(json &data, std::ofstream &log_file,
             apply_gravity(particles, g, dt, beta, T0);
 
         particles_to_grid(particles, mass, vx, vy, mass_x, mass_y, log_file);
-        particles_temp_to_grid(particles, T, T_changed, kern_sum_T, log_file);
+        particles_temp_to_grid(particles, T, kern_sum_T, log_file);
 
         divergence(vx, vy, div, dom, speed_condition, log_file);
 

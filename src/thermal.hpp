@@ -16,8 +16,7 @@ typedef struct _therm_bc {
 } therm_bc;
 
 int particles_temp_to_grid(particle_field *particles, scalar_field *T,
-                           std::vector<bool> &changed, scalar_field *kern_sum_T,
-                           std::ofstream &log_file);
+                           scalar_field *kern_sum_T, std::ofstream &log_file);
 
 int grid_temp_to_particles(particle_field *particles, scalar_field *T,
                            std::ofstream &log_file);

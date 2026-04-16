@@ -3,6 +3,7 @@
 #include "nlohmann/json.hpp"
 #include "particules.hpp"
 #include "utils.hpp"
+#include <cstdlib>
 #include <limits>
 
 using json = nlohmann::json;
@@ -11,8 +12,7 @@ using json = nlohmann::json;
  @brief brings the particule fields to the grid
 */
 int particles_temp_to_grid(particle_field *particles, scalar_field *T,
-                           std::vector<bool> &changed, scalar_field *kern_sum_T,
-                           std::ofstream &log_file) {
+                           scalar_field *kern_sum_T, std::ofstream &log_file) {
     LOG_INFO(log_file, "Transferring the temperature of particles to the grid");
 
     int nx = T->nx, ny = T->ny;
@@ -106,8 +106,15 @@ void apply_thermal_eq(scalar_field *T, scalar_field *T_temp, therm_bc *bcs,
 
     int nx = T->nx, ny = T->ny;
     float dx = T->dx;
-    float alpha = (dt * k) / (dx * dx * rho * c);
+    double alpha = (dt * k) / (dx * dx * rho * c);
     LOG_INFO(log_file, "\talpha = " << alpha);
+
+    if (!alpha) {
+        LOG_ERR(log_file, "alpha is zero! Exiting.");
+        LOG_INFO(log_file, "dt = " << dt << "\ndx = " << dx << "\nk = " << k
+                                   << "\nrho = " << rho << "\nc = " << c);
+        exit(EXIT_FAILURE);
+    }
 
     int iter = 0;
     int N = std::min(nx, ny);
@@ -214,32 +221,53 @@ void build_thermal_bc(therm_bc *bcs, json &data, std::ofstream &log_file) {
 
     bcs->type.resize(4);
     bcs->val.resize(4);
+
     // Easy access to the condition
     auto condition = data["thermal_bcs"];
     for (int k = 0; k < (int)condition.size(); k++) {
-        const int type = condition[k]["type"];
-        const int side = condition[k]["side"];
+        const std::string type_s = condition[k]["type"];
+        const std::string side_s = condition[k]["side"];
         const float val = condition[k]["val"];
+
+        int side;
+        if (side_s == "left")
+            side = 0;
+        else if (side_s == "right")
+            side = 1;
+        else if (side_s == "top")
+            side = 2;
+        else if (side_s == "bottom")
+            side = 3;
+        else
+            continue;
+
+        THERM_BC_TYPE type;
+        if (type_s == "DIRICHLET")
+            type = DIRICHLET_THERM;
+        else if (type_s == "NEUMANN")
+            type = NEUMANN_THERM;
+        else
+            continue;
 
         switch (side) {
         case 0: {
             // left boundary
-            bcs->type[0] = (THERM_BC_TYPE)type;
+            bcs->type[0] = type;
             bcs->val[0] = val;
         } break;
         case 1: {
             // right boundary
-            bcs->type[1] = (THERM_BC_TYPE)type;
+            bcs->type[1] = type;
             bcs->val[1] = val;
         } break;
         case 2: {
             // top boundary
-            bcs->type[2] = (THERM_BC_TYPE)type;
+            bcs->type[2] = type;
             bcs->val[2] = val;
         } break;
         case 3: {
             // bottom boundary
-            bcs->type[3] = (THERM_BC_TYPE)type;
+            bcs->type[3] = type;
             bcs->val[3] = val;
         } break;
         default:

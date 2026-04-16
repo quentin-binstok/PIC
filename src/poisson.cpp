@@ -1,7 +1,6 @@
 #include "poisson.hpp"
 #include "conditions.hpp"
 #include "data.hpp"
-#include "nlohmann/json.hpp"
 #include "utils.hpp"
 
 /*

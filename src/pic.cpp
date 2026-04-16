@@ -161,7 +161,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     float T0 = data.value("T0", 20);
     float beta = data.value("beta", 0.01);
     float c = data.value("c", 4.186);
-    float k = data.value("k", 1);
+    float k = data.value("k", 1.0f);
     RNG rng(dx, dt);
 
     // Computing the creation rate
@@ -210,8 +210,6 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     scalar_field *T =
         scalar_field_init("Temperature", nx, ny, 0, 0, dx, log_file);
     scalar_field *T_temp = scalar_field_copy(T, log_file);
-    std::vector<bool> T_changed;
-    T_changed.resize(nx * ny);
 
     scalar_field *kern_sum_vx =
         scalar_field_init("kern_sum_vx", nx, ny, 0, 0, dx, log_file);
@@ -307,7 +305,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
 
         particles_speed_to_grid(particles, vx, vy, kern_sum_vx, kern_sum_vy,
                                 log_file);
-        particles_temp_to_grid(particles, T, T_changed, kern_sum_T, log_file);
+        particles_temp_to_grid(particles, T, kern_sum_T, log_file);
 
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
