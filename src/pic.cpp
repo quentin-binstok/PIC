@@ -1,7 +1,9 @@
 #include "conditions.hpp"
 #include "data.hpp"
 #include "nlohmann/json.hpp"
+#include "particules.hpp"
 #include "poisson.hpp"
+#include "thermal.hpp"
 #include "utils.hpp"
 
 #include <algorithm>
@@ -12,93 +14,9 @@
 #include <fstream>
 #include <iostream>
 #include <ostream>
-#include <random>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
-
-/*
- @brief advects a single particle with the PIC scheme
- @param x, y: must contain the original position, will be overwritten
-*/
-inline void advect_single_particle(float *x, float *y, scalar_field *vx,
-                                   scalar_field *vy, float dt,
-                                   std::ofstream &log_file) {
-
-    // Three-stage third-order RK scheme
-    float init_x = *x;
-    float init_y = *y;
-
-    float k_1x, k_1y;
-    get_speed(&k_1x, &k_1y, init_x, init_y, vx, vy, log_file);
-
-    float x2 = init_x + 0.5 * dt * k_1x;
-    float y2 = init_y + 0.5 * dt * k_1y;
-    float k_2x, k_2y;
-    get_speed(&k_2x, &k_2y, x2, y2, vx, vy, log_file);
-
-    float x3 = init_x + 0.75 * dt * k_2x;
-    float y3 = init_y + 0.75 * dt * k_2y;
-    float k_3x, k_3y;
-    get_speed(&k_3x, &k_3y, x3, y3, vx, vy, log_file);
-
-    float x_new = init_x + (2.0f / 9.0f) * dt * k_1x +
-                  (3.0f / 9.0f) * dt * k_2x + (4.0f / 9.0f) * dt * k_3x;
-    float y_new = init_y + (2.0f / 9.0f) * dt * k_1y +
-                  (3.0f / 9.0f) * dt * k_2y + (4.0f / 9.0f) * dt * k_3y;
-
-    *x = x_new;
-    *y = y_new;
-}
-
-/*
- @brief avects the particles based on their velocity, using the PIC scheme
-*/
-inline int advect_pic(particle_field *particles, scalar_field *vx,
-                      scalar_field *vy, float dt, std::ofstream &log_file) {
-    LOG_INFO(log_file, "Advecting particles");
-
-#pragma omp parallel for
-    for (int k = 0; k < particles->N; k++) {
-        // Three-stage third-order RK scheme
-        float x = particles->xyz[2 * k];
-        float y = particles->xyz[2 * k + 1];
-
-        float k_1x, k_1y;
-        get_speed(&k_1x, &k_1y, x, y, vx, vy, log_file);
-
-        float x2 = x + 0.5 * dt * k_1x;
-        float y2 = y + 0.5 * dt * k_1y;
-        float k_2x, k_2y;
-        get_speed(&k_2x, &k_2y, x2, y2, vx, vy, log_file);
-
-        float x3 = x + 0.75 * dt * k_2x;
-        float y3 = y + 0.75 * dt * k_2y;
-        float k_3x, k_3y;
-        get_speed(&k_3x, &k_3y, x3, y3, vx, vy, log_file);
-
-        float x_new = x + (2.0f / 9.0f) * dt * k_1x +
-                      (3.0f / 9.0f) * dt * k_2x + (4.0f / 9.0f) * dt * k_3x;
-        float y_new = y + (2.0f / 9.0f) * dt * k_1y +
-                      (3.0f / 9.0f) * dt * k_2y + (4.0f / 9.0f) * dt * k_3y;
-
-        particles->xyz[2 * k] = x_new;
-        particles->xyz[2 * k + 1] = y_new;
-    }
-
-    return EXIT_SUCCESS;
-}
-
-/*
- @brief the kernel used to bring back particule fields on the grid
-*/
-inline float kernel(float r) {
-    if (0 <= r && r <= 1)
-        return 1 - r;
-    if (-1 <= r && r <= 0)
-        return 1 + r;
-    return 0;
-}
 
 /*
  @brief brings the particule fields to the grid
@@ -206,271 +124,14 @@ inline int grid_speed_to_particles(particle_field *particles, scalar_field *vx,
     return EXIT_SUCCESS;
 }
 
-// Kinematic application of gravity
-void apply_gravity(particle_field *particles, float g, float dt) {
-#pragma omp parallel for
-    for (int k = 0; k < particles->N; k++) {
-        particles->velocity[2 * k + 1] -= g * dt;
-    }
-}
-
-/*
- @brief Initializes the particles on the grid
-*/
-inline void initialize_particles_pic(particle_field *particles,
-                                     scalar_field *dom, scalar_field *vx,
-                                     scalar_field *vy, int density,
-                                     std::ofstream &log_file) {
-    // Initialization of stuff
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<double> dist(-0.5 * dom->dx, 0.5 * dom->dx);
-    int nx = dom->nx, ny = dom->ny;
-    float dx = dom->dx;
-
-    int nb_not_fluid_cases = 0;
-    int current_id = 0;
-
-    particles->xyz.resize(2 * density * nx * ny);
-    particles->velocity.resize(2 * density * nx * ny);
-
-#pragma omp parallel for collapse(2)
-    for (int j = 0; j < ny; j++) {
-        for (int i = 0; i < nx; i++) {
-            float cell = GET(dom, i, j);
-            // Only populate liquid cells
-            if (cell != SOLID && cell != AIR) {
-                for (int k = 0; k < density; k++) {
-                    float x, y;
-#pragma omp critical
-                    x = i * dx + dist(gen);
-#pragma omp critical
-                    y = j * dx + dist(gen);
-                    particles->xyz[2 * current_id] = x;
-                    particles->xyz[2 * current_id + 1] = y;
-
-                    // To have speed initialization
-                    float v_x, v_y;
-                    get_speed(&v_x, &v_y, x, y, vx, vy, log_file);
-
-                    particles->velocity[2 * current_id] = v_x;
-                    particles->velocity[2 * current_id + 1] = v_y;
-
-#pragma omp atomic
-                    current_id++;
-                }
-
-            } else {
-#pragma omp atomic
-                nb_not_fluid_cases++;
-            }
-        }
-    }
-
-    // After the loop:
-    particles->N = current_id;
-    particles->next_id = current_id; // next to assign = current_id
-    particles->xyz.resize(2 * current_id);
-    particles->velocity.resize(2 * current_id);
-
-    // Fill ids properly
-    particles->id.resize(current_id);
-    std::iota(particles->id.begin(), particles->id.end(), 0);
-}
-
-// Removes a single particle of index p (not ID!)
-void remove_particle(particle_field *particles, int p) {
-    int last = particles->N - 1;
-
-    // Early exit if removing the last particle (no swap needed)
-    if (p != last) {
-        std::swap(particles->xyz[2 * p], particles->xyz[2 * last]);
-        std::swap(particles->xyz[2 * p + 1], particles->xyz[2 * last + 1]);
-
-        std::swap(particles->velocity[2 * p], particles->velocity[2 * last]);
-        std::swap(particles->velocity[2 * p + 1],
-                  particles->velocity[2 * last + 1]);
-
-        std::swap(particles->id[p], particles->id[last]);
-    }
-
-    particles->xyz.pop_back();
-    particles->xyz.pop_back();
-    particles->velocity.pop_back();
-    particles->velocity.pop_back();
-    particles->id.pop_back();
-
-    particles->N--;
-}
-
-/*
- @brief computes the density and removes particles in invalid places
-*/
-inline int check_particles(particle_field *particles, scalar_field *dom,
-                           std::vector<int> &density, std::ofstream &log_file) {
-    LOG_INFO(log_file, "Updating particles")
-
-    int nx = dom->nx;
-    int ny = dom->ny;
-    float dx = dom->dx;
-
-    std::fill(density.begin(), density.end(), 0);
-
-    // Remove invalid particles
-    int p = 0;
-    while (p < particles->N) {
-
-        float x = particles->xyz[2 * p];
-        float y = particles->xyz[2 * p + 1];
-
-        // exact cell
-        int i = (int)(x / dx + 0.5f);
-        int j = (int)(y / dx + 0.5f);
-
-        // Check if the particle is out of bounds
-        if (i < 0 || j < 0 || i >= nx || j >= ny) {
-            remove_particle(particles, p);
-            continue;
-        }
-
-        // Check if the particle is in a solid cell
-        float cell = GET(dom, i, j);
-        if (cell == SOLID) {
-            remove_particle(particles, p);
-            continue;
-        }
-
-        density[j * nx + i]++;
-        p++;
-    }
-
-    return EXIT_SUCCESS;
-}
-
-/*
- @brief fills the cell (i,j) with particles until imposed_density
-*/
-inline void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
-                      scalar_field *vy, scalar_field *dom, int imposed_density,
-                      std::vector<int> &density, float dt, RNG &rng,
-                      std::ofstream &log_file) {
-    int nx = vx->nx;
-    int ny = vx->ny;
-    float dx = vx->dx;
-
-    int idx = j * nx + i;
-    int cell_density = density[idx];
-
-    int to_add = std::max(0, imposed_density - cell_density);
-
-    for (int k = 0; k < to_add; ++k) {
-
-        // Spawn position (jittered inside cell)
-        float x = i * dx + rng.jitter(rng.gen);
-        float y = j * dx + rng.jitter(rng.gen);
-
-        // Get velocity at position
-        float vx_p, vy_p;
-        get_speed(&vx_p, &vy_p, x, y, vx, vy, log_file);
-
-        // Random birth time integration
-        float tau = rng.birth(rng.gen);
-        float remaining = dt - tau;
-
-        advect_single_particle(&x, &y, vx, vy, remaining, log_file);
-
-        // Compute new cell index (faster than floor)
-        int fi = (int)(x / dx + 0.5f);
-        int fj = (int)(y / dx + 0.5f);
-
-        // Bounds + solid check (merged for branch efficiency)
-        if (fi < 0 || fj < 0 || fi >= nx || fj >= ny)
-            continue;
-
-        if (GET(dom, fi, fj) == SOLID)
-            continue;
-
-        // Add particle
-        particles->xyz.push_back(x);
-        particles->xyz.push_back(y);
-
-        particles->velocity.push_back(vx_p);
-        particles->velocity.push_back(vy_p);
-
-        particles->id.push_back(particles->next_id++);
-
-        // Optional: remove if you switch to size()
-        particles->N++;
-
-        // Update density
-        density[fj * nx + fi]++;
-    }
-}
-
-/*
- @brief refills the domain, change cell types
-*/
-inline void refill_domain(particle_field *particles, scalar_field *dom,
-                          scalar_field *vx, scalar_field *vy,
-                          std::vector<int> &density, int particle_density,
-                          bool refill, float creation_rate, float dt, RNG &rng,
-                          std::ofstream &log_file) {
-    LOG_INFO(log_file, "Refilling domain");
-
-    int nx = dom->nx;
-    int ny = dom->ny;
-
-#pragma omp parallel for collapse(2)
-    for (int j = 0; j < ny; ++j) {
-        for (int i = 0; i < nx; ++i) {
-
-            int idx = j * nx + i;
-
-            float cell_type = GET(dom, i, j);
-            int cell_density = density[idx];
-
-            // --- DIRICHLET: inflow ---
-            if (cell_type == DIRICHLET) {
-
-                float n = dt * creation_rate;
-                int target_number = (int)n;
-
-#pragma omp critical
-                fill_cell(i, j, particles, vx, vy, dom, target_number, density,
-                          dt, rng, log_file);
-            }
-
-            // --- LIQUID cells ---
-            else if (cell_type == LIQUID) {
-
-                if (refill && cell_density < particle_density) {
-
-#pragma omp critical
-                    fill_cell(i, j, particles, vx, vy, dom, particle_density,
-                              density, dt, rng, log_file);
-                } else if (cell_density < 1) {
-                    SET(dom, i, j, AIR);
-                }
-            }
-
-            // --- AIR cells (convert back to liquid if needed) ---
-            else if (cell_type == AIR && i > 0 && i < nx - 1 && j > 0 &&
-                     j < ny - 1) {
-
-                if (cell_density > 0) {
-                    SET(dom, i, j, LIQUID);
-                }
-            }
-        }
-    }
-}
-
 /*
  @brief the PIC/FLIP
  @param data: the whole json
  @param log_file: the log file
+ @param metrics_file: the metrics file
 */
-int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
+int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
+               fs::path work_dir) {
     LOG_INFO(log_file, "Starting the PIC/FLIP solver");
 
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -488,6 +149,7 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
     unsigned int nt = data.value("nt", 10);
     float rho = data.value("rho", 1000);
     float tol = data.value("tol", 1e-5);
+    float tol_therm = data.value("tol_therm", 1e-5);
     int max_iter = data.value("max_iter", 1e5);
     int particle_density = data.value("particle_density", 8);
     bool refill = data.value("refill", false);
@@ -495,6 +157,11 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
     LOG_INFO(log_file, "FLIP percentage is " << flip_param * 100);
     bool gravity = data.value("gravity", false);
     float g = data.value("g", 9.81);
+    float init_temp = data.value("init_temperature", 20);
+    float T0 = data.value("T0", 20);
+    float beta = data.value("beta", 0.01);
+    float c = data.value("c", 4.186);
+    float k = data.value("k", 1.0f);
     RNG rng(dx, dt);
 
     // Computing the creation rate
@@ -540,10 +207,16 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
     scalar_field *temp_p = scalar_field_copy(p, log_file);
 
+    scalar_field *T =
+        scalar_field_init("Temperature", nx, ny, 0, 0, dx, log_file);
+    scalar_field *T_temp = scalar_field_copy(T, log_file);
+
     scalar_field *kern_sum_vx =
         scalar_field_init("kern_sum_vx", nx, ny, 0, 0, dx, log_file);
     scalar_field *kern_sum_vy =
         scalar_field_init("kern_sum_vy", nx, ny, 0, 0, dx, log_file);
+    scalar_field *kern_sum_T =
+        scalar_field_init("kern_sum_T", nx, ny, 0, 0, dx, log_file);
 
     if (!vx || !vy || !p || !div || !dom || !temp_vx || !temp_vy || !temp_p ||
         !kern_sum_vx || !kern_sum_vy) {
@@ -552,6 +225,7 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
     }
 
     std::vector<float> speed_condition;
+    therm_bc *therm_bcs = new therm_bc;
 
     // Applying the initial conditions
     initialize_speed(vx, dom, data, "ic_vx", log_file);
@@ -559,12 +233,18 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
     boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
     initialize_domain(dom, data, "ic_cell", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
+    build_thermal_bc(therm_bcs, data, log_file);
+
+#pragma omp parallel for collapse(2)
+    for (int j = 0; j < (int)ny; j++)
+        for (int i = 0; i < (int)nx; i++)
+            SET(T, i, j, init_temp);
 
     // Initializing the particles
     particle_field *particles = particle_field_init_2D(
         "particles", nx * ny * particle_density, log_file);
-    initialize_particles_pic(particles, dom, vx, vy, data["particle_density"],
-                             log_file);
+    initialize_particles(particles, dom, vx, vy, T, data["particle_density"],
+                         log_file);
 
     // Manifests
     write_manifest_vtk("particles", dt, nt, sampling_rate, 1, 1, log_file,
@@ -581,6 +261,8 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
                        work_dir);
     write_manifest_vtk(dom->name, dt, nt, sampling_rate, 1, 0, log_file,
                        work_dir);
+    write_manifest_vtk(T->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
 
     // Initial state
     write_scalar_vtk(vx, 0, 0, log_file, work_dir);
@@ -588,6 +270,7 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
     write_scalar_vtk(p, 0, 0, log_file, work_dir);
     write_scalar_vtk(div, 0, 0, log_file, work_dir);
     write_scalar_vtk(dom, 0, 0, log_file, work_dir);
+    write_scalar_vtk(T, 0, 0, log_file, work_dir);
 
     std::vector<int> density(nx * ny, 0);
 
@@ -595,6 +278,14 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
     // bool inverted = false;
     bool first_loop = true;
     std::cout << "Starting simulation" << std::endl;
+
+    Metrics m;
+    std::vector<std::string> headers = build_headers(data["metrics"]);
+    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, data["metrics"],
+                        log_file);
+    write_header(metrics_file, headers);
+    write_metrics(metrics_file, m);
+
     for (unsigned int i = 1; i < nt; i++) {
         // Logging and printing stuff
         log_file << "\n";
@@ -605,15 +296,16 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
             double sec_per_iter = seconds / i;
             std::cout << "\rRemaining computation time: "
                       << (nt - i) * sec_per_iter << "s\t";
-            std::cout << "Iteration " << i << "/" << nt;
+            std::cout << "Iteration " << i << "/" << nt << "\n";
             std::flush(std::cout);
         }
 
         if (gravity)
-            apply_gravity(particles, g, dt);
+            apply_gravity(particles, g, dt, beta, T0);
 
         particles_speed_to_grid(particles, vx, vy, kern_sum_vx, kern_sum_vy,
                                 log_file);
+        particles_temp_to_grid(particles, T, kern_sum_T, log_file);
 
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
@@ -626,6 +318,9 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
             LOG_ERR(log_file, "Iteration algorithm not supported");
             return EXIT_FAILURE;
         }
+
+        apply_thermal_eq(T, T_temp, therm_bcs, dt, c, rho, k, tol_therm,
+                         max_iter, log_file);
 
         // Needed for FLIP
         std::memcpy(temp_vx->values, vx->values, nx * ny * sizeof(float));
@@ -640,6 +335,7 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
 
         grid_speed_to_particles(particles, vx, vy, temp_vx, temp_vy, flip_param,
                                 log_file);
+        grid_temp_to_particles(particles, T, log_file);
 
         // save files
         if (sampling_rate && !(i % sampling_rate)) {
@@ -648,16 +344,21 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
             write_scalar_vtk(p, i, 0, log_file, work_dir);
             write_scalar_vtk(div, i, 0, log_file, work_dir);
             write_scalar_vtk(dom, i, 0, log_file, work_dir);
+            write_scalar_vtk(T, i, 0, log_file, work_dir);
 
             write_particles_vtp(particles, i, 0, 2, log_file, work_dir);
         }
 
-        advect_pic(particles, vx, vy, dt, log_file);
+        advect(particles, vx, vy, dt, log_file);
 
         std::fill(density.begin(), density.end(), 0);
-        check_particles(particles, dom, density, log_file);
-        refill_domain(particles, dom, vx, vy, density, particle_density, refill,
-                      creation_rate, dt, rng, log_file);
+        check_particles(particles, dom, m, density, log_file);
+        refill_domain(particles, dom, vx, vy, T, density, particle_density,
+                      refill, creation_rate, dt, rng, log_file);
+
+        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, data["metrics"],
+                            log_file);
+        write_metrics(metrics_file, m);
 
         first_loop = false;
     }
@@ -671,11 +372,15 @@ int solver_pic(json &data, std::ofstream &log_file, fs::path work_dir) {
     scalar_field_free(temp_vx, log_file);
     scalar_field_free(temp_vy, log_file);
     scalar_field_free(temp_p, log_file);
+    scalar_field_free(T, log_file);
+    scalar_field_free(T_temp, log_file);
 
     scalar_field_free(kern_sum_vx, log_file);
     scalar_field_free(kern_sum_vy, log_file);
+    scalar_field_free(kern_sum_T, log_file);
 
     free(particles);
+    delete therm_bcs;
 
     auto t1 = std::chrono::high_resolution_clock::now();
     double seconds = std::chrono::duration<double>(t1 - t0).count();

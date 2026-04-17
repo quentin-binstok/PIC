@@ -2,6 +2,10 @@
 #define __SOLVER_POISSON__
 
 #include "data.hpp"
+#include "nlohmann/json.hpp"
+#include "poisson.hpp"
+#include "utils.hpp"
+#include "conditions.hpp"
 
 /*
  @brief computes the residual term of the pressure computation

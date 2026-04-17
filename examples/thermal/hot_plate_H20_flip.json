@@ -4,7 +4,7 @@
 	"sampling_rate": 5,
 	"log_file": "log.txt",
 	"metrics_file": "metrics.csv",
-	"dir": "/media/encrypted/sim_data/hot_plate_H20_flip_3",
+	"dir": "hot_plate_H20_flip",
 	"flip": 1.0,
 
 	"grid": [100, 100],

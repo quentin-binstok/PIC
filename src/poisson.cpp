@@ -1,3 +1,4 @@
+#include "poisson.hpp"
 #include "conditions.hpp"
 #include "data.hpp"
 #include "utils.hpp"

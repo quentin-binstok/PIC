@@ -51,7 +51,9 @@ typedef struct _particle_field {
     int next_id;
     std::vector<float> xyz; // soit 2D soit 3D, each particle's position aligned
     std::vector<float> velocity; // idem
+    std::vector<float> T;
     std::vector<int> id;
+    std::vector<float> B;
 } particle_field;
 
 struct RNG {

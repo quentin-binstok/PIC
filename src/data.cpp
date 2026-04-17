@@ -44,6 +44,7 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
 */
 scalar_field *scalar_field_copy(const scalar_field *field,
                                 std::ofstream &log_file) {
+    LOG_INFO(log_file, "Copying " << field->name);
     scalar_field *new_field = new scalar_field;
     new_field->name = field->name;
     new_field->nx = field->nx;
@@ -69,7 +70,7 @@ void scalar_field_free(scalar_field *field, std::ofstream &log_file) {
     LOG_INFO(log_file, "Freeing scalar field " << field->name);
     if (field->values)
         free(field->values);
-    free(field);
+    delete field;
 }
 
 // Initializes the structure
@@ -84,6 +85,7 @@ particle_field *particle_field_init_2D(const std::string name, const int N,
     field->xyz.resize(2 * N);
     field->velocity.resize(2 * N);
     field->id.resize(N);
+    field->T.resize(N);
 
     for (int i = 0; i < N; i++) {
         field->id[i] = i;

@@ -10,6 +10,7 @@
 #endif
 
 #include "nlohmann/json.hpp"
+#include "apic.hpp"
 #include "pic.hpp"
 #include "semiLagrangian.hpp"
 #include "utils.hpp"
@@ -76,6 +77,19 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    fs::path metrics_file_path;
+    if (data.contains("metrics_file") &&
+        data["metrics_file"].type() == json::value_t::string)
+        metrics_file_path = work_dir / (fs::path)data["metrics_file"];
+    else
+        metrics_file_path = work_dir / "metrics.csv";
+
+    std::ofstream metrics_file(metrics_file_path, std::ios::out | std::ios::app);
+    if (!metrics_file.is_open()) {
+        std::cerr << "Could not open the metrics file: " << metrics_file_path << "\n";
+        return EXIT_FAILURE;
+    }
+
     // Starting log file, with starting time
     time_t timestamp;
     time(&timestamp);
@@ -106,7 +120,9 @@ int main(int argc, char **argv) {
     if (data["solver"] == "semi-lagrangian") {
         ret = solver_semi_lagrangian(data, log_file, work_dir);
     } else if (data["solver"] == "pic") {
-        ret = solver_pic(data, log_file, work_dir);
+        ret = solver_pic(data, log_file, metrics_file, work_dir);
+    } else if (data["solver"] == "apic") {
+        ret = solver_apic(data, log_file, metrics_file, work_dir);
     } else {
         LOG_ERR(log_file, "The specified solver is not supported.");
         LOG_ERR(log_file, "Exiting.")

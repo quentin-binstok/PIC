@@ -1,29 +1,29 @@
 {
 	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 5,
+	"sampling_rate": 10,
 	"log_file": "log.txt",
 	"metrics_file": "metrics.csv",
-	"dir": "/media/encrypted/sim_data/hot_plate_H20_flip_3",
+	"dir": "hot_plate_Hg_flip",
 	"flip": 1.0,
 
 	"grid": [100, 100],
 	"space_steps": 5e-3,
 	"nt": 5000,
-	"delta_t": 0.1,
+	"delta_t": 0.05,
 	"tol": 4e-4,
 	"tol_therm": 1e-6,
 	"max_iter": 1e5,
-	"rho": 1000.0,
+	"rho": 13546.0,
 
 	"gravity": true,
 	"g": 9.81,
 
 	"init_temperature": 310,
 	"T0": 293.15,
-	"beta": 2.5e-4,
-	"c": 4180.0,
-	"k": 0.6,
+	"beta": 1.8e-4,
+	"c": 140,
+	"k": 8.3,
 
 	"bc": [
 		{
