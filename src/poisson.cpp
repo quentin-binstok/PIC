@@ -1,8 +1,7 @@
-#include "data.hpp"
-#include "nlohmann/json.hpp"
 #include "poisson.hpp"
-#include "utils.hpp"
 #include "conditions.hpp"
+#include "data.hpp"
+#include "utils.hpp"
 
 /*
  @brief computes the residual term of the pressure computation

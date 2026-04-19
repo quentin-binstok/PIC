@@ -1,9 +1,10 @@
 #include "conditions.hpp"
 #include "data.hpp"
 #include "nlohmann/json.hpp"
-#include "poisson.hpp"
-#include "utils.hpp"
 #include "particules.hpp"
+#include "poisson.hpp"
+#include "thermal.hpp"
+#include "utils.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -13,7 +14,6 @@
 #include <fstream>
 #include <iostream>
 #include <ostream>
-#include <random>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -124,14 +124,14 @@ inline int grid_speed_to_particles(particle_field *particles, scalar_field *vx,
     return EXIT_SUCCESS;
 }
 
-
 /*
  @brief the PIC/FLIP
  @param data: the whole json
  @param log_file: the log file
  @param metrics_file: the metrics file
 */
-int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file, fs::path work_dir) {
+int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
+               fs::path work_dir) {
     LOG_INFO(log_file, "Starting the PIC/FLIP solver");
 
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -149,6 +149,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     unsigned int nt = data.value("nt", 10);
     float rho = data.value("rho", 1000);
     float tol = data.value("tol", 1e-5);
+    float tol_therm = data.value("tol_therm", 1e-5);
     int max_iter = data.value("max_iter", 1e5);
     int particle_density = data.value("particle_density", 8);
     bool refill = data.value("refill", false);
@@ -156,6 +157,11 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     LOG_INFO(log_file, "FLIP percentage is " << flip_param * 100);
     bool gravity = data.value("gravity", false);
     float g = data.value("g", 9.81);
+    float init_temp = data.value("init_temperature", 20);
+    float T0 = data.value("T0", 20);
+    float beta = data.value("beta", 0.01);
+    float c = data.value("c", 4.186);
+    float k = data.value("k", 1.0f);
     RNG rng(dx, dt);
 
     // Computing the creation rate
@@ -201,10 +207,16 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     scalar_field *temp_vy = scalar_field_copy(vy, log_file);
     scalar_field *temp_p = scalar_field_copy(p, log_file);
 
+    scalar_field *T =
+        scalar_field_init("Temperature", nx, ny, 0, 0, dx, log_file);
+    scalar_field *T_temp = scalar_field_copy(T, log_file);
+
     scalar_field *kern_sum_vx =
         scalar_field_init("kern_sum_vx", nx, ny, 0, 0, dx, log_file);
     scalar_field *kern_sum_vy =
         scalar_field_init("kern_sum_vy", nx, ny, 0, 0, dx, log_file);
+    scalar_field *kern_sum_T =
+        scalar_field_init("kern_sum_T", nx, ny, 0, 0, dx, log_file);
 
     if (!vx || !vy || !p || !div || !dom || !temp_vx || !temp_vy || !temp_p ||
         !kern_sum_vx || !kern_sum_vy) {
@@ -213,6 +225,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     }
 
     std::vector<float> speed_condition;
+    therm_bc *therm_bcs = new therm_bc;
 
     // Applying the initial conditions
     initialize_speed(vx, dom, data, "ic_vx", log_file);
@@ -220,12 +233,18 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
     initialize_domain(dom, data, "ic_cell", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
+    build_thermal_bc(therm_bcs, data, log_file);
+
+#pragma omp parallel for collapse(2)
+    for (int j = 0; j < (int)ny; j++)
+        for (int i = 0; i < (int)nx; i++)
+            SET(T, i, j, init_temp);
 
     // Initializing the particles
     particle_field *particles = particle_field_init_2D(
         "particles", nx * ny * particle_density, log_file);
-    initialize_particles(particles, dom, vx, vy, data["particle_density"],
-                             log_file);
+    initialize_particles(particles, dom, vx, vy, T, data["particle_density"],
+                         log_file);
 
     // Manifests
     write_manifest_vtk("particles", dt, nt, sampling_rate, 1, 1, log_file,
@@ -242,6 +261,8 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
                        work_dir);
     write_manifest_vtk(dom->name, dt, nt, sampling_rate, 1, 0, log_file,
                        work_dir);
+    write_manifest_vtk(T->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
 
     // Initial state
     write_scalar_vtk(vx, 0, 0, log_file, work_dir);
@@ -249,6 +270,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     write_scalar_vtk(p, 0, 0, log_file, work_dir);
     write_scalar_vtk(div, 0, 0, log_file, work_dir);
     write_scalar_vtk(dom, 0, 0, log_file, work_dir);
+    write_scalar_vtk(T, 0, 0, log_file, work_dir);
 
     std::vector<int> density(nx * ny, 0);
 
@@ -279,10 +301,11 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
         }
 
         if (gravity)
-            apply_gravity(particles, g, dt);
+            apply_gravity(particles, g, dt, beta, T0);
 
         particles_speed_to_grid(particles, vx, vy, kern_sum_vx, kern_sum_vy,
                                 log_file);
+        particles_temp_to_grid(particles, T, kern_sum_T, log_file);
 
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
@@ -295,6 +318,9 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
             LOG_ERR(log_file, "Iteration algorithm not supported");
             return EXIT_FAILURE;
         }
+
+        apply_thermal_eq(T, T_temp, therm_bcs, dt, c, rho, k, tol_therm,
+                         max_iter, log_file);
 
         // Needed for FLIP
         std::memcpy(temp_vx->values, vx->values, nx * ny * sizeof(float));
@@ -309,6 +335,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
 
         grid_speed_to_particles(particles, vx, vy, temp_vx, temp_vy, flip_param,
                                 log_file);
+        grid_temp_to_particles(particles, T, log_file);
 
         // save files
         if (sampling_rate && !(i % sampling_rate)) {
@@ -317,6 +344,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
             write_scalar_vtk(p, i, 0, log_file, work_dir);
             write_scalar_vtk(div, i, 0, log_file, work_dir);
             write_scalar_vtk(dom, i, 0, log_file, work_dir);
+            write_scalar_vtk(T, i, 0, log_file, work_dir);
 
             write_particles_vtp(particles, i, 0, 2, log_file, work_dir);
         }
@@ -330,7 +358,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
 
         m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, m, data["metrics"], log_file);
         write_metrics(metrics_file, m);
-        
+
         first_loop = false;
     }
 
@@ -343,11 +371,15 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     scalar_field_free(temp_vx, log_file);
     scalar_field_free(temp_vy, log_file);
     scalar_field_free(temp_p, log_file);
+    scalar_field_free(T, log_file);
+    scalar_field_free(T_temp, log_file);
 
     scalar_field_free(kern_sum_vx, log_file);
     scalar_field_free(kern_sum_vy, log_file);
+    scalar_field_free(kern_sum_T, log_file);
 
     free(particles);
+    delete therm_bcs;
 
     auto t1 = std::chrono::high_resolution_clock::now();
     double seconds = std::chrono::duration<double>(t1 - t0).count();

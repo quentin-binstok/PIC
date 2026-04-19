@@ -1,0 +1,78 @@
+{
+	"solver": "pic",
+	"iteration_algo": "SOR",
+	"sampling_rate": 10,
+	"log_file": "log.txt",
+	"metrics_file": "metrics.csv",
+	"dir": "constant_Temp_gradient_pic95",
+	"flip": 0.95,
+
+	"grid": [100, 50],
+	"space_steps": 5e-3,
+	"nt": 5000,
+	"delta_t": 0.05,
+	"tol": 4e-4,
+	"tol_therm": 1e-6,
+	"max_iter": 1e5,
+	"rho": 13546.0,
+
+	"gravity": true,
+	"g": 9.81,
+
+	"init_temperature": 310,
+	"T0": 293.15,
+	"beta": 1.8e-4,
+	"c": 140,
+	"k": 8.3,
+
+	"bc": [
+		{
+			"side": 0,
+			"type": 1.0
+		},
+		{
+			"side": 1,
+			"type": 1.0
+		},
+		{
+			"side": 2,
+			"type": 1.0
+		},
+		{
+			"side": 3,
+			"type": 1.0
+		}
+	],
+
+	"ic_cylinders": [],
+
+	"ic_cell": [],
+
+	"thermal_bcs": [
+		{
+			"side": "left",
+			"type": "NEUMANN",
+			"val": 0
+		},
+		{
+			"side": "right",
+			"type": "NEUMANN",
+			"val": 0
+		},
+		{
+			"side": "top",
+			"type": "DIRICHLET",
+			"val": 330
+		},
+		{
+			"side": "bottom",
+			"type": "DIRICHLET",
+			"val": 273.15
+		}
+	],
+
+	"particle_density": 8,
+	"refill": true,
+
+	"metrics": []
+}

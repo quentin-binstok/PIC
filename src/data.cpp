@@ -44,6 +44,7 @@ scalar_field *scalar_field_init(const std::string name, const unsigned int nx,
 */
 scalar_field *scalar_field_copy(const scalar_field *field,
                                 std::ofstream &log_file) {
+    LOG_INFO(log_file, "Copying " << field->name);
     scalar_field *new_field = new scalar_field;
     new_field->name = field->name;
     new_field->nx = field->nx;
@@ -86,6 +87,7 @@ particle_field *particle_field_init_2D(const std::string name, const int N,
     /* field->B.resize(4 * N); // for APIC affine matrix */
     field->C.resize(4 * N);
     field->id.resize(N);
+    field->T.resize(N);
 
     for (int i = 0; i < N; i++) {
         field->id[i] = i;

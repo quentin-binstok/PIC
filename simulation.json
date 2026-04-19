@@ -1,5 +1,5 @@
 {
-	"solver": "apic",
+	"solver": "pic",
 	"iteration_algo": "SOR",
 	"sampling_rate": 5,
 	"log_file": "log.txt",
@@ -17,6 +17,12 @@
 
 	"gravity": false,
 	"g": 9.81,
+
+	"init_temperature": 310,
+	"T0": 293.15,
+	"beta": 2.5e-4,
+	"c": 4180.0,
+	"k": 0.6,
 
 	"bc": [
 		{
@@ -50,7 +56,7 @@
 	"particle_density": 25,
 	"refill": true,
 
-	"metrics" : [
+	"thermal_bcs": [
 		{
 			"header": "vx",
 			"idx": [20, 50],
@@ -67,7 +73,8 @@
 		}
 	],
 
-	"fields": ["temperature"],
+	"particle_density": 8,
+	"refill": true,
 
 	"temperature": [
 		{
