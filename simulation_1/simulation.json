@@ -4,7 +4,7 @@
 	"sampling_rate": 5,
 	"log_file": "log.txt",
 	"metrics_file": "metrics_APIC_VK.csv",
-	"dir": "../VK_normal",
+	"dir": "../VK_APIC",
 	"flip": 0.0,
 
 	"grid": [200, 100],

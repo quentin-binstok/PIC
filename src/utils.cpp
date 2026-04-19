@@ -410,12 +410,21 @@ std::vector<std::string> build_headers(const json& metric_data) {
             headers.push_back("div_"+ std::to_string(metric_data[k]["idx"][0].get<int>()) + "_" + std::to_string(metric_data[k]["idx"][1].get<int>()));
         else if (h == "particles_solid")
             headers.push_back("particles_solid");
+        else if (h == "singularity_count")
+            headers.push_back("singularity_count");
     }
     return headers;
 }
 
+Metrics initialize_metrics(Metrics m, std::ofstream& log_file) {
+    LOG_INFO(log_file, "Initializing metrics");
+    m.particle_in_solid = 0;
+    m.singularity_count = 0;
+    return m;
+}
+
 Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, scalar_field *vy, scalar_field *div, 
-                            float dx, int step, int nt, const json& metric_data, std::ofstream& log_file) {
+                            float dx, int step, int nt, Metrics m, const json& metric_data, std::ofstream& log_file) {
 
     LOG_INFO(log_file, "Computing metric ");
     if (!metric_data.is_array()) {
@@ -423,8 +432,9 @@ Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, sc
         return Metrics();
     }
 
-    Metrics m;
     m.step = step;
+    m.values.clear(); 
+
 
     for (int k = 0; k < (int)metric_data.size(); k++){
         std::string h = metric_data[k]["header"];
@@ -471,11 +481,17 @@ Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, sc
             }
         }
         else if (h == "particles_solid") {
-            m.values.push_back(m.particle_count);
+            m.values.push_back(m.particle_in_solid);
             if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
                 std::cout << "Particles in solid: " << m.values.back() << "\n";
             }
         }
+        else if (h == "singularity_count") {
+            m.values.push_back(m.singularity_count);
+            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+                std::cout << "Singularities: " << m.values.back() << "\n";
+            }
+        } 
         else {
             std::cerr << "Warning: unknown metric '" << h << "', inserting 0\n";
             m.values.push_back(0.0f);

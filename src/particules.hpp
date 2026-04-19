@@ -32,6 +32,12 @@ int advect(particle_field *particles,
 float kernel(float r);
 
 /**
+ * @brief Gradient of the linear interpolation kernel.
+ */
+float kernel_grad(float x);
+
+
+/**
  * @brief Applies gravitational acceleration to all particle velocities.
  */
 void apply_gravity(particle_field *particles, float g, float dt);
@@ -66,7 +72,7 @@ void fill_cell(int i, int j,
                particle_field *particles,
                scalar_field *vx, scalar_field *vy, scalar_field *dom,
                int imposed_density, std::vector<int> &density,
-               float dt, RNG &rng, std::ofstream &log_file);
+               float dt, RNG &rng, Metrics &m, std::ofstream &log_file);
 
 /**
  * @brief Iterates over the whole domain:
@@ -81,6 +87,9 @@ void refill_domain(particle_field *particles,
                    std::vector<int> &density,
                    int particle_density,
                    bool refill, float creation_rate,
-                   float dt, RNG &rng, std::ofstream &log_file);
+                   float dt, RNG &rng, Metrics &m, std::ofstream &log_file);
+
+void compute_C(particle_field *particles, scalar_field *vx,
+                   scalar_field *vy, int p, Metrics &m);
 
 #endif

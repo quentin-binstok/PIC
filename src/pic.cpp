@@ -258,8 +258,9 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     std::cout << "Starting simulation" << std::endl;
 
     Metrics m;
+    m = initialize_metrics(m, log_file);
     std::vector<std::string> headers = build_headers(data["metrics"]);
-    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, data["metrics"], log_file);
+    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, m, data["metrics"], log_file);
     write_header(metrics_file, headers);
     write_metrics(metrics_file, m);
 
@@ -325,9 +326,9 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
         std::fill(density.begin(), density.end(), 0);
         check_particles(particles, dom, m, density, log_file);
         refill_domain(particles, dom, vx, vy, density, particle_density, refill,
-                      creation_rate, dt, rng, log_file);
+                      creation_rate, dt, rng, m, log_file);
 
-        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, data["metrics"], log_file);
+        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, m, data["metrics"], log_file);
         write_metrics(metrics_file, m);
         
         first_loop = false;
