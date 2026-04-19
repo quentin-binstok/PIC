@@ -353,7 +353,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
 
         std::fill(density.begin(), density.end(), 0);
         check_particles(particles, dom, m, density, log_file);
-        refill_domain(particles, dom, vx, vy, density, particle_density, refill,
+        refill_domain(particles, dom, vx, vy, T, density, particle_density, refill,
                       creation_rate, dt, rng, m, log_file);
 
         m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, m, data["metrics"], log_file);

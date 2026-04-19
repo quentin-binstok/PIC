@@ -109,6 +109,7 @@ particle_field *copy_particle_field(const particle_field *particles,
                            particles->velocity.end());
     /* field->B.assign(particles->B.begin(), particles->B.end()); */
     field->C.assign(particles->C.begin(), particles->C.end());
+    field->T.assign(particles->T.begin(), particles->T.end());
     field->id.assign(particles->id.begin(), particles->id.end());
 
     return field;

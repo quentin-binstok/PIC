@@ -1,38 +1,38 @@
 {
 	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 5,
+	"sampling_rate": 1,
 	"log_file": "log.txt",
-	"metrics_file": "metrics_APIC_VK.csv",
-	"dir": "../VK_normal",
-	"flip": 0.0,
+	"metrics_file": "metrics.csv",
+	"dir": "convection_cell_Hg_pic95",
+	"flip": 0.95,
 
-	"grid": [200, 100],
+	"grid": [100, 100],
 	"space_steps": 5e-3,
-	"nt": 2500,
-	"delta_t": 0.001,
-	"tol": 1e-2,
+	"nt": 500,
+	"delta_t": 0.2,
+	"tol": 4e-4,
+	"tol_therm": 1e-6,
 	"max_iter": 1e5,
-	"rho": 1000.0,
+	"rho": 13546.0,
 
-	"gravity": false,
+	"gravity": true,
 	"g": 9.81,
 
-	"init_temperature": 310,
+	"init_temperature": 300,
 	"T0": 293.15,
-	"beta": 2.5e-4,
-	"c": 4180.0,
-	"k": 0.6,
+	"beta": 1.8e-4,
+	"c": 140,
+	"k": 8.3,
 
 	"bc": [
 		{
 			"side": 0,
-			"type": 3.0,
-			"speed_x": 1.0
+			"type": 1.0
 		},
 		{
 			"side": 1,
-			"type": 2.0
+			"type": 1.0
 		},
 		{
 			"side": 2,
@@ -44,43 +44,35 @@
 		}
 	],
 
-	"ic_cylinders": [
-		{
-			"center": [50, 50],
-			"radius": 10
-		}
-	],
+	"ic_cylinders": [],
 
 	"ic_cell": [],
 
-	"particle_density": 25,
-	"refill": true,
-
 	"thermal_bcs": [
 		{
-			"header": "vx",
-			"idx": [20, 50],
-			"print": true
+			"side": "left",
+			"type": "DIRICHLET",
+			"val": 350
 		},
 		{
-			"header": "pressure",
-			"idx": [20, 50],
-			"print": true
+			"side": "right",
+			"type": "DIRICHLET",
+			"val": 273.15
 		},
 		{
-			"header": "singularity_count",
-			"print": true
+			"side": "top",
+			"type": "NEUMANN",
+			"val": 0
+		},
+		{
+			"side": "bottom",
+			"type": "NEUMANN",
+			"val": 0
 		}
 	],
 
 	"particle_density": 8,
 	"refill": true,
 
-	"temperature": [
-		{
-			"tl": [10, 40],
-			"br": [35, 60],
-			"value": 5.0
-		}
-	]
+	"metrics": []
 }

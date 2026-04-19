@@ -274,7 +274,7 @@ int check_particles(particle_field *particles, scalar_field *dom, Metrics &m,
     return EXIT_SUCCESS;
 }
 
-void compute_C(particle_field *particles, scalar_field *vx,
+std::vector<float> compute_C(particle_field *particles, scalar_field *vx,
                    scalar_field *vy, int p, Metrics &m) {
     int nx = vx->nx, ny = vx->ny;
     float dx = vx->dx;
@@ -289,6 +289,8 @@ void compute_C(particle_field *particles, scalar_field *vx,
 
     float Dx_00 = 0, Dx_01 = 0, Dx_11 = 0;  // symmetric: D10 = D01
     float Dy_00 = 0, Dy_01 = 0, Dy_11 = 0;  // symmetric: D10 = D01
+
+    std::vector<float> C(4, 0.0f);
 
     // --- x-faces ---
     int i_vx = std::max(0, (int)(x / dx - 0.5)); // matches get_speed
@@ -350,11 +352,11 @@ void compute_C(particle_field *particles, scalar_field *vx,
         float ix_11 =  Dx_00 / det_Dx;
 
         // Cx = bx^T * Dx^-1  (row 0 of C)
-        particles->C[4*p]     = bx_0 * ix_00 + bx_1 * ix_01;  // C00
-        particles->C[4*p + 1] = bx_0 * ix_01 + bx_1 * ix_11;  // C01
+        C[0] = bx_0 * ix_00 + bx_1 * ix_01;  // C00
+        C[1] = bx_0 * ix_01 + bx_1 * ix_11;  // C01
     } else {
-        particles->C[4*p]     = 0.0f;
-        particles->C[4*p + 1] = 0.0f;
+        C[0] = 0.0f;
+        C[1] = 0.0f;
         m.singularity_count++;
     }
     if (det_Dy > 1e-15 && i_vy < nx - 1 && j_vy < ny - 1 && j_vy >= 0 && i_vy >= 0){ // avoid singularity (treat as PIC)
@@ -362,17 +364,14 @@ void compute_C(particle_field *particles, scalar_field *vx,
         float iy_01 = -Dy_01 / det_Dy;
         float iy_11 =  Dy_00 / det_Dy;
 
-        particles->C[4*p + 2] = by_0 * iy_00 + by_1 * iy_01;  // C10
-        particles->C[4*p + 3] = by_0 * iy_01 + by_1 * iy_11;  // C11
-    } else if (i_vy >= nx - 1 || j_vy >= ny - 1){
-        particles->C[4*p + 2] = 0.0f;
-        particles->C[4*p + 3] = 0.0f;
-        m.singularity_count++;
+        C[2] = by_0 * iy_00 + by_1 * iy_01;  // C10
+        C[3] = by_0 * iy_01 + by_1 * iy_11;  // C11
     } else {
-        particles->C[4*p + 2] = 0.0f;
-        particles->C[4*p + 3] = 0.0f;
+        C[2] = 0.0f;
+        C[3] = 0.0f;
         m.singularity_count++;
     }
+    return C;
 }
         
 
@@ -440,9 +439,9 @@ void compute_C(particle_field *particles, scalar_field *vx,
  @brief fills the cell (i,j) with particles until imposed_density
 */
 void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
-                      scalar_field *vy, scalar_field *dom, int imposed_density,
-                      std::vector<int> &density, float dt, RNG &rng, Metrics &m,
-                      std::ofstream &log_file) {
+               scalar_field *vy, scalar_field *dom, scalar_field *T,
+               int imposed_density, std::vector<int> &density, float dt,
+               RNG &rng, Metrics &m, std::ofstream &log_file) {
     int nx = vx->nx;
     int ny = vx->ny;
     float dx = vx->dx;
@@ -495,12 +494,11 @@ void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
 
         compute_B(particles, vx, vy, particles->N - 1); */
 
-        particles->C.push_back(0);
-        particles->C.push_back(0);
-        particles->C.push_back(0);
-        particles->C.push_back(0);
-
-        compute_C(particles, vx, vy, particles->N - 1, m);
+        std::vector<float> C = compute_C(particles, vx, vy, particles->N - 1, m);
+        particles->C.push_back(C[0]);
+        particles->C.push_back(C[1]);
+        particles->C.push_back(C[2]);
+        particles->C.push_back(C[3]);
 
         particles->id.push_back(particles->next_id++);
         particles->T.push_back(temp);
@@ -517,10 +515,11 @@ void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
  @brief refills the domain, change cell types
 */
 void refill_domain(particle_field *particles, scalar_field *dom,
-                          scalar_field *vx, scalar_field *vy,
-                          std::vector<int> &density, int particle_density,
-                          bool refill, float creation_rate, float dt, RNG &rng, Metrics &m,
-                          std::ofstream &log_file) {
+                   scalar_field *vx, scalar_field *vy, scalar_field *T,
+                   std::vector<int> &density, int particle_density, bool refill,
+                   float creation_rate, float dt, RNG &rng, Metrics &m,
+                   std::ofstream &log_file)
+{
     LOG_INFO(log_file, "Refilling domain");
 
     int nx = dom->nx;
@@ -542,7 +541,7 @@ void refill_domain(particle_field *particles, scalar_field *dom,
                 int target_number = (int)n;
 
 #pragma omp critical
-                fill_cell(i, j, particles, vx, vy, dom, target_number, density,
+                fill_cell(i, j, particles, vx, vy, dom, T, target_number, density,
                           dt, rng, m,  log_file);
             }
 
@@ -551,7 +550,7 @@ void refill_domain(particle_field *particles, scalar_field *dom,
 
                 if (refill && cell_density < particle_density) {
 #pragma omp critical
-                    fill_cell(i, j, particles, vx, vy, dom, particle_density, density,
+                    fill_cell(i, j, particles, vx, vy, dom, T, particle_density, density,
                               dt, rng, m, log_file);
                 } else if (cell_density < 1) {
                     SET(dom, i, j, AIR);

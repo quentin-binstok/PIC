@@ -64,11 +64,11 @@ int check_particles(particle_field *particles, scalar_field *dom, Metrics &m,
 /**
  * @brief Fills cell (i, j) with new particles up to imposed_density.
  */
-void fill_cell(int i, int j,
-               particle_field *particles,
-               scalar_field *vx, scalar_field *vy, scalar_field *dom,
-               int imposed_density, std::vector<int> &density,
-               float dt, RNG &rng, Metrics &m, std::ofstream &log_file);
+void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
+               scalar_field *vy, scalar_field *dom, scalar_field *T,
+               int imposed_density, std::vector<int> &density, float dt,
+               RNG &rng, std::ofstream &log_file);
+
 
 /**
  * @brief Iterates over the whole domain:
@@ -79,13 +79,13 @@ void fill_cell(int i, int j,
  */
 void refill_domain(particle_field *particles,
                    scalar_field *dom,
-                   scalar_field *vx, scalar_field *vy,
+                   scalar_field *vx, scalar_field *vy, scalar_field *T,
                    std::vector<int> &density,
                    int particle_density,
                    bool refill, float creation_rate,
                    float dt, RNG &rng, Metrics &m, std::ofstream &log_file);
 
-void compute_C(particle_field *particles, scalar_field *vx,
+std::vector<float> compute_C(particle_field *particles, scalar_field *vx,
                    scalar_field *vy, int p, Metrics &m);
 
 #endif
