@@ -11,7 +11,7 @@ The available parameters can be grouped in several ways.
 - Type: string
 - Role: defines the solver used
 
-This can either be `semi-lagrangian` or `pic`.
+This can either be `semi-lagrangian`, `pic` or `apic`.
 
 ### `iteration_algo`
 
@@ -184,6 +184,34 @@ The objects are to be as:
 	"center": [20, 50],
 	"radius": 10
 }
+```
+## `metrics`
+To compare different simulations, specific measurements can be recorded at each time step. These measurements are stored in a `.csv` file, whose name can be specified using the `"metrics_file"` parameter. The available metrics can be divided into two categories: 
+	- Global (domain-wide) parameters : the total volume (`volume`), the free surface area (`free_surface_area`), the number of particles located in solid cells at the end of each time step(`particles_solid`), and the number of particles that generate a singular affine matrix D (`singularity_count`).
+	- Local (cell-based) parameters : the velocity components along x or y (`vx_` or `vy_`), the pressure (`pressure_`), the divergence (`div_`), and the fluid depth at a given position (`depth_`).
+
+To store a specific parameter, its name must be provided using "header". For local parameters, the cell at which the value is evaluated must be specified using "idx".
+
+The depth parameter is a special case: it only uses a single index, as it computes the number of consecutive fluid cells starting from 0 up to the first non-fluid cell.
+
+Another option is the "print" field, which takes a boolean value. If set to true, the metric is printed in the console every nt/10 time steps. If set to false, the value is only written to the .csv file.
+
+```json
+"metrics" : [
+		{
+			"header": "volume",
+			"print": true
+		},
+		{
+			"header": "free_surface_area",
+			"print": true
+		},
+		{
+			"header": "vx",
+			"idx": [97, 2],
+			"print": false
+		}
+	],
 ```
 
 ## User-defined fields

@@ -30,6 +30,12 @@ int advect(particle_field *particles, scalar_field *vx, scalar_field *vy,
 float kernel(float r);
 
 /**
+ * @brief Gradient of the linear interpolation kernel.
+ */
+float kernel_grad(float x);
+
+
+/**
  * @brief Applies gravitational acceleration to all particle velocities.
  */
 void apply_gravity(particle_field *particles, float g, float dt, float beta,
@@ -63,6 +69,7 @@ void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
                int imposed_density, std::vector<int> &density, float dt,
                RNG &rng, std::ofstream &log_file);
 
+
 /**
  * @brief Iterates over the whole domain:
  *        - replenishes DIRICHLET inflow cells
@@ -70,10 +77,15 @@ void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
  *        - converts depopulated LIQUID cells to AIR
  *        - converts populated AIR cells back to LIQUID
  */
-void refill_domain(particle_field *particles, scalar_field *dom,
+void refill_domain(particle_field *particles,
+                   scalar_field *dom,
                    scalar_field *vx, scalar_field *vy, scalar_field *T,
-                   std::vector<int> &density, int particle_density, bool refill,
-                   float creation_rate, float dt, RNG &rng,
-                   std::ofstream &log_file);
+                   std::vector<int> &density,
+                   int particle_density,
+                   bool refill, float creation_rate,
+                   float dt, RNG &rng, Metrics &m, std::ofstream &log_file);
+
+std::vector<float> compute_C(particle_field *particles, scalar_field *vx,
+                   scalar_field *vy, int p, Metrics &m);
 
 #endif

@@ -1,0 +1,84 @@
+{
+	"solver": "apic",
+	"iteration_algo": "SOR",
+	"sampling_rate": 10,
+	"log_file": "log.txt",
+	"metrics_file": "metrics_APIC_DB.csv",
+	"dir": "../DB_normal",
+	"flip": 0.0,
+
+	"grid": [100, 100],
+	"space_steps": 5e-3,
+	"nt": 5000,
+	"delta_t": 0.001,
+	"tol": 1e-2,
+	"max_iter": 1e5,
+	"rho": 1000.0,
+
+	"gravity": true,
+	"g": 9.81,
+
+	"bc": [
+		{
+			"side": 0,
+			"type": 1.0
+		},
+		{
+			"side": 1,
+			"type": 1.0
+		},
+		{
+			"side": 2,
+			"type": 2.0
+		},
+		{
+			"side": 3,
+			"type": 1.0
+		}
+	],
+
+	"ic_cylinders": [],
+
+	"ic_cell": [
+		{
+			"tl": [1, 1],
+			"br": [98, 99],
+			"value": 2.0
+		},
+		{
+			"tl": [1, 1],
+			"br": [49, 49],
+			"value": 0.0
+		}
+	],
+
+	"particle_density": 25,
+	"refill": false,
+
+	"metrics" : [
+		{
+			"header": "vx",
+			"idx": [20, 50],
+			"print": true
+		},
+		{
+			"header": "pressure",
+			"idx": [20, 50],
+			"print": true
+		},
+		{
+			"header": "singularity_count",
+			"print": true
+		}
+	],
+
+	"fields": ["temperature"],
+
+	"temperature": [
+		{
+			"tl": [10, 40],
+			"br": [35, 60],
+			"value": 5.0
+		}
+	]
+}
