@@ -102,6 +102,26 @@ inline int advect(scalar_field *vx, scalar_field *vy, float dt,
     return EXIT_SUCCESS;
 }
 
+void apply_gravity_SL(scalar_field *vy, scalar_field *dom, float dt, float g,
+                      std::ofstream &log_file) {
+    LOG_INFO(log_file, "Applying gravity");
+    int nx = vy->nx, ny = vy->ny;
+
+#pragma omp parallel for collapse(2)
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            CELL_TYPE cell = (CELL_TYPE)GET(dom, i, j);
+
+            CELL_TYPE top_cell = LIQUID;
+            if (j != ny - 1)
+                top_cell = (CELL_TYPE)GET(dom, i, j + 1);
+
+            if (cell == LIQUID && (top_cell == LIQUID || top_cell == AIR))
+                SET(vy, i, j, GET(vy, i, j) - dt * g);
+        }
+    }
+}
+
 /*
  @brief the semi lagrangian solver
  @param data: the whole json
@@ -125,6 +145,8 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file,
     float rho = data.value("rho", 1000);
     float tol = data.value("tol", 1e-5);
     int max_iter = data.value("max_iter", 1e5);
+    bool gravity = data.value("gravity", false);
+    float g = data.value("g", 9.81);
 
     std::vector<float> speed_condition;
 
@@ -159,12 +181,15 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file,
                        work_dir);
     write_manifest_vtk(div->name, dt, nt, sampling_rate, 1, 0, log_file,
                        work_dir);
+    write_manifest_vtk(dom->name, dt, nt, sampling_rate, 1, 0, log_file,
+                       work_dir);
 
     // Initial time step
     write_scalar_vtk(vx, 0, 0, log_file, work_dir);
     write_scalar_vtk(vy, 0, 0, log_file, work_dir);
     write_scalar_vtk(p, 0, 0, log_file, work_dir);
     write_scalar_vtk(div, 0, 0, log_file, work_dir);
+    write_scalar_vtk(dom, 0, 0, log_file, work_dir);
 
     // Main time loop
     bool inverted = false;
@@ -182,6 +207,9 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file,
             std::cout << "Iteration " << i << "/" << nt;
             std::flush(std::cout);
         }
+
+        if (gravity)
+            apply_gravity_SL(vy, dom, dt, g, log_file);
 
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
@@ -207,6 +235,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file,
             write_scalar_vtk(vy, i, 0, log_file, work_dir);
             write_scalar_vtk(p, i, 0, log_file, work_dir);
             write_scalar_vtk(div, i, 0, log_file, work_dir);
+            write_scalar_vtk(dom, i, 0, log_file, work_dir);
         }
 
         // advect

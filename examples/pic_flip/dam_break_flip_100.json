@@ -3,6 +3,7 @@
 	"iteration_algo": "SOR",
 	"sampling_rate": 10,
 	"log_file": "log.txt",
+	"dir": "pic_dam_break_flip_100",
 	"flip": 1.0,
 
 	"grid": [200, 200],

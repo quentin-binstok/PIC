@@ -3,6 +3,7 @@
 	"iteration_algo": "SOR",
 	"sampling_rate": 5,
 	"log_file": "log.txt",
+	"dir": "pic_von_karman_pic",
 	"flip": 0.0,
 
 	"grid": [200, 200],
