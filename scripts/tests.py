@@ -90,7 +90,9 @@ def run_batch(args):
                 with open(json_file_name, "w") as json_file:
                     json.dump(data, json_file)
 
-                subprocess.run([args.binary, json_file_name], capture_output=True)
+                subprocess.run(
+                    [str(args.binary.resolve()), json_file_name], capture_output=True
+                )
                 pathlib.Path(json_file_name)._delete()
                 logger.info(f"\tEnded {filename}")
 
@@ -119,7 +121,9 @@ def run_compare(args):
                 with open(json_file_name, "w") as json_file:
                     json.dump(data, json_file)
 
-                subprocess.run([args.binary, json_file_name], capture_output=True)
+                subprocess.run(
+                    [str(args.binary.resolve()), json_file_name], capture_output=True
+                )
                 pathlib.Path(json_file_name)._delete()
 
                 df = read_csv(
