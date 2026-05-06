@@ -1,13 +1,13 @@
 {
-	"solver": "pic",
+	"solver": "apic",
 	"iteration_algo": "SOR",
 	"sampling_rate": 5,
 	"log_file": "log.txt",
 	"metrics_file": "metrics_APIC_VK.csv",
 	"dir": "../VK_normal",
-	"flip": 1.0,
+	"flip": 0.0,
 
-	"grid": [50, 50],
+	"grid": [100, 50],
 	"space_steps": 5e-3,
 	"nt": 2500,
 	"delta_t": 0.001,

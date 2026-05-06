@@ -84,8 +84,13 @@ particle_field *particle_field_init_2D(const std::string name, const int N,
     field->next_id = N;
     field->xyz.resize(2 * N);
     field->velocity.resize(2 * N);
+    field->bx.resize(2 * N);
+    field->by.resize(2 * N);
+    field->ix.resize(3 * N);
+    field->iy.resize(3 * N);
+
     /* field->B.resize(4 * N); // for APIC affine matrix */
-    field->C.resize(4 * N);
+    /* field->C.resize(4 * N); */
     field->id.resize(N);
     field->T.resize(N);
 
@@ -108,7 +113,11 @@ particle_field *copy_particle_field(const particle_field *particles,
     field->velocity.assign(particles->velocity.begin(),
                            particles->velocity.end());
     /* field->B.assign(particles->B.begin(), particles->B.end()); */
-    field->C.assign(particles->C.begin(), particles->C.end());
+    /* field->C.assign(particles->C.begin(), particles->C.end()); */
+    field->ix.assign(particles->ix.begin(), particles->ix.end());
+    field->iy.assign(particles->iy.begin(), particles->iy.end());
+    field->bx.assign(particles->bx.begin(), particles->bx.end());
+    field->by.assign(particles->by.begin(), particles->by.end());
     field->T.assign(particles->T.begin(), particles->T.end());
     field->id.assign(particles->id.begin(), particles->id.end());
 

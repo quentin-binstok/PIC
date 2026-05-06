@@ -1,13 +1,13 @@
 {
-	"solver": "pic",
+	"solver": "apic",
 	"iteration_algo": "SOR",
 	"sampling_rate": 5,
 	"log_file": "log.txt",
 	"metrics_file": "metrics_APIC_VK.csv",
 	"dir": "../VK_normal",
-	"flip": 1.0,
+	"flip": 0.0,
 
-	"grid": [50, 50],
+	"grid": [75, 50],
 	"space_steps": 5e-3,
 	"nt": 2500,
 	"delta_t": 0.001,
@@ -22,7 +22,7 @@
 		{
 			"side": 0,
 			"type": 3.0,
-			"speed_x": 2.5
+			"speed_x": 5.0
 		},
 		{
 			"side": 1,
@@ -40,8 +40,8 @@
 
 	"ic_cylinders": [
 		{
-			"center": [20, 25],
-			"radius": 5
+			"center": [25, 25],
+			"radius": 6
 		}
 	],
 
@@ -58,10 +58,6 @@
 		},
 		{
 			"header": "singularity_count",
-			"print": true
-		},
-		{
-			"header": "dirichlet",
 			"print": true
 		}
 	],
