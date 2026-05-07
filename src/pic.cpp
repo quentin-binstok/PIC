@@ -233,6 +233,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
     initialize_domain(dom, data, "ic_cell", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
+    initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green", log_file);
     build_thermal_bc(therm_bcs, data, log_file);
 
 #pragma omp parallel for collapse(2)
