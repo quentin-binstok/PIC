@@ -20,6 +20,7 @@ struct Metrics {
     int step;
     int particle_in_solid;
     int singularity_count;
+    int dirichlet;
     std::vector<std::string> headers;
     std::vector<float> values;
 };
@@ -80,15 +81,15 @@ int project_velocity(scalar_field *p, scalar_field *vx, scalar_field *vy,
 float volume(scalar_field *dom, float dx);
 float free_surface_area(scalar_field *dom, float dx);
 float depth(scalar_field *dom, int idx, float dx);
+std::vector<float> computeCoefficients(scalar_field *dom, scalar_field *p, float dx, 
+                        float U_inf, float rho, float A_ref, std::ofstream &log_file);
 
-void write_metrics(std::ofstream &f, const Metrics &m);
-void write_header(std::ofstream &f, const std::vector<std::string> &headers);
-Metrics initialize_metrics(Metrics m, std::ofstream &log_file);
-Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx,
-                        scalar_field *vy, scalar_field *div, float dx, int step,
-                        int nt, Metrics m, const json &metric_data,
-                        std::ofstream &log_file);
-std::vector<std::string> build_headers(const json &metric_data);
+void write_metrics(std::ofstream& f, const Metrics& m);
+void write_header(std::ofstream& f, const std::vector<std::string>& headers);
+Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, scalar_field *vy, scalar_field *div, 
+                            float dx, int step, int nt, int singularity, int solid_particles, int dirichlet, Metrics m, const json& metric_data, std::ofstream& log_file);
+std::vector<std::string> build_headers(const json& metric_data);
+
 
 void sine_surface(json &data, scalar_field *dom, std::ofstream &log_file);
 

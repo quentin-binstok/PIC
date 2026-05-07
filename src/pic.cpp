@@ -234,12 +234,15 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
     initialize_domain(dom, data, "ic_cell", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
+
     if (thermal)
         build_thermal_bc(therm_bcs, data, log_file);
 
     if (data.contains("special")) {
         if (data["special"]["type"] == "sine")
             sine_surface(data, dom, log_file);
+        if (data["special"]["type"] == "taylor green")
+            initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green", log_file);
     }
 
 #pragma omp parallel for collapse(2)
@@ -289,10 +292,16 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     std::cout << "Starting simulation" << std::endl;
 
     Metrics m;
-    m = initialize_metrics(m, log_file);
     std::vector<std::string> headers = build_headers(data["metrics"]);
+<<<<<<< src/pic.cpp
+    int singularity = 0;
+    int solid_particles = 0;
+    int dirichlet = 0;
+    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+=======
     m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, m, data["metrics"],
                         log_file);
+>>>>>>> src/pic.cpp
     write_header(metrics_file, headers);
     write_metrics(metrics_file, m);
 
@@ -309,6 +318,10 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
             std::cout << "Iteration " << i << "/" << nt << "\n";
             std::flush(std::cout);
         }
+
+        m.singularity_count = 0;
+        m.particle_in_solid = 0;
+        m.dirichlet = 0;
 
         if (gravity)
             apply_gravity(particles, g, dt, beta, T0);
@@ -370,8 +383,12 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
         refill_domain(particles, dom, vx, vy, T, density, particle_density,
                       refill, creation_rate, dt, rng, m, log_file);
 
+<<<<<<< src/pic.cpp
+        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+=======
         m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, m, data["metrics"],
                             log_file);
+>>>>>>> src/pic.cpp
         write_metrics(metrics_file, m);
 
         first_loop = false;

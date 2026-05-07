@@ -363,3 +363,70 @@ int create_circle(scalar_field *dom, std::string condition_name, json &data,
 
     return EXIT_SUCCESS;
 }
+
+/**
+ * @brief Initialize a 2D Taylor–Green vortex (Euler, inviscid)
+ *
+ * u(x,y) =  U0 sin(kx) cos(ky)
+ * v(x,y) = -U0 cos(kx) sin(ky)
+ *
+ * The field is initialized only in FLUID cells.
+ */
+int initialize_taylor_green_vortex( scalar_field *vx, scalar_field *vy, scalar_field *dom, json &data,
+                       std::string condition_name, std::ofstream &log_file)
+{
+    LOG_INFO(log_file, "Initializing Taylor–Green vortex (Euler)");
+
+    if (!data.contains(condition_name)) {
+        LOG_WARN(log_file, "Condition " << condition_name << " not given");
+        return EXIT_SUCCESS;
+    }
+    // Checking that condition is an array
+    if (data.contains(condition_name) &&
+        data[condition_name].type() != json::value_t::array) {
+        LOG_ERR(log_file, "Condition " << condition_name << " is not an array");
+        return EXIT_FAILURE;
+    }
+
+    // Easy access to the condition
+    auto condition = data[condition_name];
+
+    int nx = vx->nx;
+    int ny = vx->ny;
+    float dx = vx->dx;
+
+    for(int k = 0; k < (int)condition.size(); k++) {
+        float U0 = condition[k]["Uinf"];
+        float wn = condition[k]["wavenumber"];
+
+        // Domain length assumed periodic: L = nx * dx = 2π/k
+        // Here we directly use physical coordinates
+#pragma omp parallel for collapse(2)
+        for (int j = 0; j < ny; j++) {
+            for (int i = 0; i < nx; i++) {
+
+                if (GET(dom, i, j) != LIQUID)
+                    continue;
+
+                // Cell-centered coordinates
+                float x = (i + 0.5f) * dx;
+                float y = (j + 0.5f) * dx;
+
+                float u =
+                    U0 * std::sin(wn * x) * std::cos(wn * y);
+
+                float v =
+                    -U0 * std::cos(wn * x) * std::sin(wn * y);
+
+                // Respect staggered-solid logic
+                if (GET(dom, i + 1, j) != SOLID)
+                    SET(vx, i, j, u);
+
+                if (GET(dom, i, j + 1) != SOLID)
+                    SET(vy, i, j, v);
+            }
+        }
+    }
+
+    return EXIT_SUCCESS;
+}

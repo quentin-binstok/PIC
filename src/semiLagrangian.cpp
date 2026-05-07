@@ -126,8 +126,10 @@ void apply_gravity_SL(scalar_field *vy, scalar_field *dom, float dt, float g,
  @brief the semi lagrangian solver
  @param data: the whole json
  @param log_file: the log file
+ @param metrics_file: the metrics file
+ @param work_dir: the working directory
 */
-int solver_semi_lagrangian(json &data, std::ofstream &log_file,
+int solver_semi_lagrangian(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
                            fs::path work_dir) {
     LOG_INFO(log_file, "Starting the semi-lagrangian solver");
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -170,6 +172,7 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file,
     initialize_speed(vx, dom, data, "ic_vx", log_file);
     initialize_speed(vy, dom, data, "ic_vy", log_file);
     boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
+    initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
 
     // Manifests
@@ -190,6 +193,18 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file,
     write_scalar_vtk(p, 0, 0, log_file, work_dir);
     write_scalar_vtk(div, 0, 0, log_file, work_dir);
     write_scalar_vtk(dom, 0, 0, log_file, work_dir);
+
+    Metrics m;
+    std::vector<std::string> headers = build_headers(data["metrics"]);
+    m.singularity_count = 0;
+    m.particle_in_solid = 0;
+    m.dirichlet = 0;
+    int singularity = 0;
+    int solid_particles = 0;
+    int dirichlet = 0;
+    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+    write_header(metrics_file, headers);
+    write_metrics(metrics_file, m);
 
     // Main time loop
     bool inverted = false;
@@ -241,6 +256,9 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file,
         // advect
         advect(vx, vy, dt, vx, temp_vx, log_file);
         advect(vx, vy, dt, vy, temp_vy, log_file);
+
+        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+        write_metrics(metrics_file, m);
 
         inverted = !inverted;
         scalar_field *invert_vx = vx;

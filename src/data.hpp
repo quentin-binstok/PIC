@@ -53,8 +53,12 @@ typedef struct _particle_field {
     std::vector<float> velocity; // idem
     std::vector<float> T;
     std::vector<int> id;
+    std::vector<float> ix; // for APIC, the interpolation of the velocity gradient
+    std::vector<float> iy;
+    std::vector<float> bx; // for APIC, the affine part of the velocity
+    std::vector<float> by;
     /* std::vector<float> B; */
-    std::vector<float> C; // for APIC affine matrix
+    /* std::vector<float> C; // for APIC affine matrix */
 } particle_field;
 
 struct RNG {

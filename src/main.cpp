@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
     // Launches the solver, using a common error handling
     int ret = 0;
     if (data["solver"] == "semi-lagrangian") {
-        ret = solver_semi_lagrangian(data, log_file, work_dir);
+        ret = solver_semi_lagrangian(data, log_file, metrics_file, work_dir);
     } else if (data["solver"] == "pic") {
         ret = solver_pic(data, log_file, metrics_file, work_dir);
     } else if (data["solver"] == "apic") {

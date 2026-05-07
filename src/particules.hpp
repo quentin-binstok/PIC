@@ -61,13 +61,16 @@ void remove_particle(particle_field *particles, int p);
 int check_particles(particle_field *particles, scalar_field *dom, Metrics &m,
                     std::vector<int> &density, std::ofstream &log_file);
 
+
+void compute_coeff(particle_field *particles, scalar_field *dom, scalar_field *vx, scalar_field *vy,
+    Metrics &m, std::ofstream &log_file);
 /**
  * @brief Fills cell (i, j) with new particles up to imposed_density.
  */
 void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
-               scalar_field *vy, scalar_field *dom, scalar_field *T,
-               int imposed_density, std::vector<int> &density, float dt,
-               RNG &rng, std::ofstream &log_file);
+            scalar_field *vy, scalar_field *dom, scalar_field *T,
+            int imposed_density, std::vector<int> &density, float dt,
+            RNG &rng, Metrics &m, std::ofstream &log_file);
 
 
 /**
@@ -77,15 +80,10 @@ void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
  *        - converts depopulated LIQUID cells to AIR
  *        - converts populated AIR cells back to LIQUID
  */
-void refill_domain(particle_field *particles,
-                   scalar_field *dom,
+void refill_domain(particle_field *particles, scalar_field *dom,
                    scalar_field *vx, scalar_field *vy, scalar_field *T,
-                   std::vector<int> &density,
-                   int particle_density,
-                   bool refill, float creation_rate,
-                   float dt, RNG &rng, Metrics &m, std::ofstream &log_file);
-
-std::vector<float> compute_C(particle_field *particles, scalar_field *vx,
-                   scalar_field *vy, int p, Metrics &m);
+                   std::vector<int> &density, int particle_density, bool refill,
+                   float creation_rate, float dt, RNG &rng, Metrics &m,
+                   std::ofstream &log_file);
 
 #endif
