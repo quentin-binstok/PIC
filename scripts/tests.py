@@ -21,6 +21,16 @@ from pandas import read_csv
 
 # Setting up logging
 logger = logging.getLogger(__name__)
+logging.basicConfig(
+    filename="test.py.log",
+    encoding="utf-8",
+    format="%(asctime)s\t%(levelname)s\t%(message)s",
+    level=logging.DEBUG,
+)
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+logger.addHandler(ch)
 
 
 # Arguments
@@ -67,9 +77,9 @@ def get_args():
 # ================
 
 
-def run_batch(args):
+def run_batch(input_dir, output_dir, binary: pathlib.Path):
     logger.info("Starting batch")
-    for root, dirs, files in pathlib.Path.walk(args.input):
+    for root, dirs, files in pathlib.Path.walk(input_dir):
         for file in files:
             abs_dir = root / file
             with open(abs_dir, "r") as f:
@@ -84,22 +94,22 @@ def run_batch(args):
                 )
                 logger.info(f"\tStarting {filename}")
 
-                data["dir"] = args.output_dir + "/" + filename
+                data["dir"] = output_dir + "/" + filename
                 data["metrics_file"] = filename + ".csv"
                 json_file_name = filename + ".json"
                 with open(json_file_name, "w") as json_file:
                     json.dump(data, json_file)
 
                 subprocess.run(
-                    [str(args.binary.resolve()), json_file_name], capture_output=True
+                    [str(binary.resolve()), json_file_name], capture_output=True
                 )
                 pathlib.Path(json_file_name)._delete()
                 logger.info(f"\tEnded {filename}")
 
 
-def run_compare(args):
+def run_compare(input_dir, output_dir):
     logging.info("Starting compare")
-    for root, dirs, files in pathlib.Path.walk(args.input):
+    for root, dirs, files in pathlib.Path.walk(input_dir):
         for file in files:
             abs_dir = root / file
             with open(abs_dir, "r") as f:
@@ -114,7 +124,7 @@ def run_compare(args):
                 )
                 logger.info(f"\tStarting {filename}")
 
-                data["dir"] = args.output_dir + "/" + filename
+                data["dir"] = output_dir + "/" + filename
                 data["metrics_file"] = filename + ".csv"
                 metrics_file = pathlib.Path(filename + ".csv")
                 json_file_name = filename + ".json"
@@ -167,16 +177,16 @@ def run_compare(args):
 def main():
     args = get_args()
 
-    logging.basicConfig(
-        filename=args.log,
-        encoding="utf-8",
-        format="%(asctime)s\t%(levelname)s\t%(message)s",
-        level=logging.DEBUG,
-    )
+    # logging.basicConfig(
+    #     filename=args.log,
+    #     encoding="utf-8",
+    #     format="%(asctime)s\t%(levelname)s\t%(message)s",
+    #     level=logging.DEBUG,
+    # )
 
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    logger.addHandler(ch)
+    # ch = logging.StreamHandler()
+    # ch.setLevel(logging.DEBUG)
+    # logger.addHandler(ch)
 
     logger.info(f"===========================")
     logger.info(f"Running in {args.mode} mode")
@@ -199,9 +209,9 @@ def main():
 
     # Main part
     if args.mode == "batch":
-        run_batch(args)
+        run_batch(args.input, args.output_dir)
     elif args.mode == "compare":
-        run_compare(args)
+        run_compare(args.input, args.ouput_dir)
 
 
 if __name__ == "__main__":

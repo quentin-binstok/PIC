@@ -237,6 +237,11 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     if (thermal)
         build_thermal_bc(therm_bcs, data, log_file);
 
+    if (data.contains("special")) {
+        if (data["special"]["type"] == "sine")
+            sine_surface(data, dom, log_file);
+    }
+
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < (int)ny; j++)
         for (int i = 0; i < (int)nx; i++)
