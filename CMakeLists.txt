@@ -8,7 +8,7 @@ INCLUDE(CMakePrintHelpers)
 
 # change "Debug" => "Release" for a faster executable (but less runtime checks)!
 IF(NOT CMAKE_BUILD_TYPE)
-    SET(CMAKE_BUILD_TYPE "Debug" CACHE STRING "" FORCE)
+    SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 ENDIF()
 
 # enable C++17
@@ -38,6 +38,8 @@ ENDIF()
 IF(WPEDANTIC)
     ADD_COMPILE_OPTIONS(-Wpedantic)
 ENDIF()
+
+ADD_COMPILE_OPTIONS(-fsignaling-nans)
 
 # find OpenMP
 FIND_PACKAGE(OpenMP)

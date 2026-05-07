@@ -1,0 +1,68 @@
+{
+	"solver": "pic",
+	"iteration_algo": "SOR",
+	"sampling_rate": 1,
+	"log_file": "log.txt",
+	"metrics_file": "metrics_PIC_VK.csv",
+	"dir": "pic_von_karman",
+
+	"grid": [200, 100],
+	"space_steps": 5e-3,
+	"nt": 500,
+	"delta_t": 0.002,
+	"tol": 1e-3,
+	"max_iter": 1e5,
+	"rho": 1000.0,
+
+	"gravity": false,
+	"g": 9.81,
+
+	"bc": [
+		{
+			"side": 0,
+			"type": 3.0,
+			"speed_x": 1.0
+		},
+		{
+			"side": 1,
+			"type": 2.0
+		},
+		{
+			"side": 2,
+			"type": 1.0
+		},
+		{
+			"side": 3,
+			"type": 1.0
+		}
+	],
+
+	"ic_cylinders": [
+		{
+			"center": [50, 50],
+			"radius": 10
+		}
+	],
+
+	"ic_cell": [],
+
+	"particle_density": 25,
+	"refill": true,
+
+	"metrics": [
+		{
+			"header": "vx",
+			"idx": [20, 50],
+			"print": false
+		},
+		{
+			"header": "pressure",
+			"idx": [20, 50],
+			"print": false
+		},
+		{
+			"header": "singularity_count",
+			"print": false
+		}
+	]
+}

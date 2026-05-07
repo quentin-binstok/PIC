@@ -110,7 +110,7 @@ int boundary_condition(scalar_field *vx, scalar_field *vy, scalar_field *dom,
     if (data.contains(condition_name) &&
         data[condition_name].type() != json::value_t::array) {
         LOG_ERR(log_file, "Condition " << condition_name << " is not an array");
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
     speed_condition.resize(4);

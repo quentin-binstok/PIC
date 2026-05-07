@@ -2,6 +2,7 @@
 #include "conditions.hpp"
 #include "data.hpp"
 #include "nlohmann/json.hpp"
+#include <cmath>
 #include <iostream>
 
 using json = nlohmann::json;
@@ -601,4 +602,22 @@ void write_metrics(std::ofstream &f, const Metrics &m) {
         f << "," << std::setprecision(10) << std::scientific << v;
     f << "\n";
     f.flush();
+}
+
+void sine_surface(json &data, scalar_field *dom, std::ofstream &log_file) {
+    int height = data["special"]["height"];
+    int amp = data["special"]["amplitude"];
+    float freq = data["special"]["frequency"];
+
+    int nx = dom->nx;
+    int ny = dom->ny;
+
+    for (int i = 1; i < nx; i++) {
+        int h =
+            amp * std::sin(2 * 3.141592 * freq * (float)i / (float)nx) + height;
+        for (int j = 1; j < h; j++) {
+            if (j < ny - 2)
+                SET(dom, i, j, LIQUID);
+        }
+    }
 }

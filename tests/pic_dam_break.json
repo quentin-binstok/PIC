@@ -1,17 +1,16 @@
 {
-	"solver": "apic",
+	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 10,
+	"sampling_rate": 1,
 	"log_file": "log.txt",
-	"metrics_file": "metrics_APIC_DB.csv",
-	"dir": "../DB_normal",
-	"flip": 0.0,
+	"metrics_file": "metrics_PIC_DB.csv",
+	"dir": "pic_dam_break",
 
 	"grid": [100, 100],
 	"space_steps": 5e-3,
-	"nt": 5000,
-	"delta_t": 0.001,
-	"tol": 1e-2,
+	"nt": 500,
+	"delta_t": 0.002,
+	"tol": 1e-3,
 	"max_iter": 1e5,
 	"rho": 1000.0,
 
@@ -55,30 +54,20 @@
 	"particle_density": 25,
 	"refill": false,
 
-	"metrics" : [
+	"metrics": [
 		{
 			"header": "vx",
 			"idx": [20, 50],
-			"print": true
+			"print": false
 		},
 		{
 			"header": "pressure",
 			"idx": [20, 50],
-			"print": true
+			"print": false
 		},
 		{
 			"header": "singularity_count",
-			"print": true
-		}
-	],
-
-	"fields": ["temperature"],
-
-	"temperature": [
-		{
-			"tl": [10, 40],
-			"br": [35, 60],
-			"value": 5.0
+			"print": false
 		}
 	]
 }
