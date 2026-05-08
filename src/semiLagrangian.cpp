@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -129,8 +130,8 @@ void apply_gravity_SL(scalar_field *vy, scalar_field *dom, float dt, float g,
  @param metrics_file: the metrics file
  @param work_dir: the working directory
 */
-int solver_semi_lagrangian(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
-                           fs::path work_dir) {
+int solver_semi_lagrangian(json &data, std::ofstream &log_file,
+                           std::ofstream &metrics_file, fs::path work_dir) {
     LOG_INFO(log_file, "Starting the semi-lagrangian solver");
     auto t0 = std::chrono::high_resolution_clock::now();
     if (check_params(data, log_file)) {
@@ -202,7 +203,9 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file, std::ofstream &m
     int singularity = 0;
     int solid_particles = 0;
     int dirichlet = 0;
-    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+    m = compute_metrics(dom, p, vx, vy, div, NULL, dx, 0, nt, singularity,
+                        solid_particles, dirichlet, m, data["metrics"],
+                        log_file);
     write_header(metrics_file, headers);
     write_metrics(metrics_file, m);
 
@@ -257,7 +260,9 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file, std::ofstream &m
         advect(vx, vy, dt, vx, temp_vx, log_file);
         advect(vx, vy, dt, vy, temp_vy, log_file);
 
-        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+        m = compute_metrics(dom, p, vx, vy, div, NULL, dx, i, nt, singularity,
+                            solid_particles, dirichlet, m, data["metrics"],
+                            log_file);
         write_metrics(metrics_file, m);
 
         inverted = !inverted;

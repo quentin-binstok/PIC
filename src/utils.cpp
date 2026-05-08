@@ -337,9 +337,10 @@ float depth(scalar_field *dom, int idx, float dx) {
     return depth * dx;
 }
 
-std::vector<float> computeCoefficients(scalar_field *dom, scalar_field *p, float dx, 
-                        float U_inf, float rho, float A_ref, std::ofstream &log_file) {
-    
+std::vector<float> computeCoefficients(scalar_field *dom, scalar_field *p,
+                                       float dx, float U_inf, float rho,
+                                       float A_ref, std::ofstream &log_file) {
+
     float Fx = 0.0f;
     float Fy = 0.0f;
 
@@ -352,32 +353,35 @@ std::vector<float> computeCoefficients(scalar_field *dom, scalar_field *p, float
     for (int j = 1; j < ny - 1; j++) {
         for (int i = 1; i < nx - 1; i++) {
 
-            if (GET(dom, i, j) != SOLID) continue;
+            if (GET(dom, i, j) != SOLID)
+                continue;
 
             // Left face
             if (GET(dom, i - 1, j) == LIQUID) {
                 float p_left = GET(p, i - 1, j);
-                Fx += p_left * dx;   // normal = (+1, 0)
+                Fx += p_left * dx; // normal = (+1, 0)
             }
 
             // Right face
             if (GET(dom, i + 1, j) == LIQUID) {
                 float p_right = GET(p, i + 1, j);
-                Fx -= p_right * dx;   // normal = (-1, 0)
+                Fx -= p_right * dx; // normal = (-1, 0)
             }
 
             // Bottom face
             if (GET(dom, i, j - 1) == LIQUID) {
                 float p_bottom = GET(p, i, j - 1);
-                Fy += p_bottom * dx;   // normal = (0, +1)
+                Fy += p_bottom * dx; // normal = (0, +1)
             }
 
             // Top face
             if (GET(dom, i, j + 1) == LIQUID) {
                 float p_top = GET(p, i, j + 1);
-                Fy -= p_top * dx;   // normal = (0, -1)
+                Fy -= p_top * dx; // normal = (0, -1)
             }
-            LOG_INFO(log_file, "Computed forces: " << Fx << ", " << Fy << " at cell (" << i << ", " << j << ")");
+            LOG_INFO(log_file, "Computed forces: " << Fx << ", " << Fy
+                                                   << " at cell (" << i << ", "
+                                                   << j << ")");
         }
     }
 
@@ -388,7 +392,6 @@ std::vector<float> computeCoefficients(scalar_field *dom, scalar_field *p, float
 
     return aero;
 }
-
 
 /*
  @brief sets the tangential speeds in solids and air equal to the one in liquid
@@ -455,13 +458,17 @@ std::vector<std::string> build_headers(const json &metric_data) {
         else if (h == "aero_coefficients") {
             headers.push_back("Cd");
             headers.push_back("Cl");
-        }
-        else if (h == "depth")
+        } else if (h == "depth")
             headers.push_back("depth_" +
                               std::to_string(metric_data[k]["idx"].get<int>()));
         else if (h == "pressure")
             headers.push_back(
                 "pressure_" +
+                std::to_string(metric_data[k]["idx"][0].get<int>()) + "_" +
+                std::to_string(metric_data[k]["idx"][1].get<int>()));
+        else if (h == "temperature")
+            headers.push_back(
+                "temperature_" +
                 std::to_string(metric_data[k]["idx"][0].get<int>()) + "_" +
                 std::to_string(metric_data[k]["idx"][1].get<int>()));
         else if (h == "vx")
@@ -486,10 +493,11 @@ std::vector<std::string> build_headers(const json &metric_data) {
     return headers;
 }
 
-
-Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, scalar_field *vy, scalar_field *div, 
-                            float dx, int step, int nt, int singularity, int solid_particles, 
-                            int dirichlet, Metrics m, const json& metric_data, std::ofstream& log_file) {
+Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx,
+                        scalar_field *vy, scalar_field *div, scalar_field *T,
+                        float dx, int step, int nt, int singularity,
+                        int solid_particles, int dirichlet, Metrics m,
+                        const json &metric_data, std::ofstream &log_file) {
 
     LOG_INFO(log_file, "Computing metric ");
     if (!metric_data.is_array()) {
@@ -498,7 +506,7 @@ Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, sc
     }
 
     m.step = step;
-    m.values.clear(); 
+    m.values.clear();
 
     for (int k = 0; k < (int)metric_data.size(); k++) {
         std::string h = metric_data[k]["header"];
@@ -523,7 +531,8 @@ Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, sc
             float rho = metric_data[k]["rho"].get<float>();
             float U_inf = metric_data[k]["U_inf"].get<float>();
             float A_ref = metric_data[k]["A_ref"].get<float>();
-            std::vector<float> aero = computeCoefficients(dom, p, dx, U_inf, rho, A_ref, log_file);
+            std::vector<float> aero =
+                computeCoefficients(dom, p, dx, U_inf, rho, A_ref, log_file);
             m.values.push_back(aero[0]);
             m.values.push_back(aero[1]);
             if (metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0) {
@@ -534,6 +543,15 @@ Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, sc
                                    metric_data[k]["idx"][1].get<int>()));
             if (metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0) {
                 std::cout << "Pressure at ("
+                          << metric_data[k]["idx"][0].get<int>() << ", "
+                          << metric_data[k]["idx"][1].get<int>()
+                          << "): " << m.values.back() << "\n";
+            }
+        } else if (h == "temperature") {
+            m.values.push_back(GET(T, metric_data[k]["idx"][0].get<int>(),
+                                   metric_data[k]["idx"][1].get<int>()));
+            if (metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0) {
+                std::cout << "Temperature at ("
                           << metric_data[k]["idx"][0].get<int>() << ", "
                           << metric_data[k]["idx"][1].get<int>()
                           << "): " << m.values.back() << "\n";
@@ -562,26 +580,22 @@ Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, sc
                           << ", " << metric_data[k]["idx"][1].get<int>()
                           << "): " << m.values.back() << "\n";
             }
-        }
-        else if (h == "particles_solid") {
+        } else if (h == "particles_solid") {
             m.values.push_back(solid_particles);
-            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+            if (metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0) {
                 std::cout << "Particles in solid: " << m.values.back() << "\n";
             }
-        }
-        else if (h == "singularity_count") {
+        } else if (h == "singularity_count") {
             m.values.push_back(singularity);
-            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+            if (metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0) {
                 std::cout << "Singularities: " << m.values.back() << "\n";
             }
-        }
-        else if (h == "dirichlet") {
+        } else if (h == "dirichlet") {
             m.values.push_back(dirichlet);
-            if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
+            if (metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0) {
                 std::cout << "Dirichlet cells: " << m.values.back() << "\n";
             }
-        }
-        else {
+        } else {
             std::cerr << "Warning: unknown metric '" << h << "', inserting 0\n";
             m.values.push_back(0.0f);
         }
@@ -605,6 +619,8 @@ void write_metrics(std::ofstream &f, const Metrics &m) {
 }
 
 void sine_surface(json &data, scalar_field *dom, std::ofstream &log_file) {
+    LOG_INFO(log_file, "Making a sine surface");
+
     int height = data["special"]["height"];
     int amp = data["special"]["amplitude"];
     float freq = data["special"]["frequency"];

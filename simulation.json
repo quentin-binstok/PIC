@@ -1,35 +1,50 @@
 {
-	"solver": "apic",
+	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 10,
+	"sampling_rate": 1,
 	"log_file": "log.txt",
-	"metrics_file": "metrics_APIC_DB.csv",
-	"dir": "../DB_normal",
-	"flip": 0.0,
+	"metrics_file": "metrics_PIC_VK.csv",
+	"dir": "pic_von_karman",
+	"flip": 0.95,
 
-	"grid": [100, 100],
+	"grid": [200, 100],
 	"space_steps": 5e-3,
-	"nt": 5000,
-	"delta_t": 0.001,
-	"tol": 1e-2,
+	"nt": 10000,
+	"delta_t": 0.002,
+	"tol": 1e-3,
+	"tol_therm": 1e-5,
 	"max_iter": 1e5,
 	"rho": 1000.0,
 
-	"gravity": true,
+	"thermal": true,
+	"c": 4180.0,
+	"k": 6,
+	"beta": 2.5e-4,
+	"init_temperature": 310,
+	"T0": 293.15,
+	"rho_sol": 7850,
+	"c_sol": 490,
+	"k_sol": 500,
+	"rho_air": 1.2,
+	"c_air": 1000,
+	"k_air": 0.025,
+
+	"gravity": false,
 	"g": 9.81,
 
 	"bc": [
 		{
 			"side": 0,
-			"type": 1.0
+			"type": 3.0,
+			"speed_x": 0.2
 		},
 		{
 			"side": 1,
-			"type": 1.0
+			"type": 2.0
 		},
 		{
 			"side": 2,
-			"type": 2.0
+			"type": 1.0
 		},
 		{
 			"side": 3,
@@ -37,46 +52,63 @@
 		}
 	],
 
-	"ic_cylinders": [],
-
-	"ic_cell": [
+	"ic_cylinders": [
 		{
-			"tl": [1, 1],
-			"br": [98, 99],
-			"value": 2.0
-		},
-		{
-			"tl": [1, 1],
-			"br": [49, 49],
-			"value": 0.0
+			"center": [50, 50],
+			"radius": 10
 		}
 	],
 
-	"particle_density": 25,
-	"refill": false,
-
-	"metrics" : [
+	"heat_gen": [
 		{
-			"header": "volume",
-			"print": true
+			"center": [50, 50],
+			"radius": 10,
+			"value": 10000000.0
+		}
+	],
+
+	"thermal_bcs": [
+		{
+			"side": "left",
+			"type": "DIRICHLET",
+			"val": 310
 		},
 		{
-			"header": "free_surface_area",
-			"print": true
+			"side": "right",
+			"type": "NEUMANN",
+			"val": 0
+		},
+		{
+			"side": "top",
+			"type": "NEUMANN",
+			"val": 0
+		},
+		{
+			"side": "bottom",
+			"type": "NEUMANN",
+			"val": 0
+		}
+	],
+
+	"ic_cell": [],
+
+	"particle_density": 25,
+	"refill": true,
+
+	"metrics": [
+		{
+			"header": "vx",
+			"idx": [20, 50],
+			"print": false
+		},
+		{
+			"header": "pressure",
+			"idx": [20, 50],
+			"print": false
 		},
 		{
 			"header": "singularity_count",
-			"print": true
-		}
-	],
-
-	"fields": ["temperature"],
-
-	"temperature": [
-		{
-			"tl": [10, 40],
-			"br": [35, 60],
-			"value": 5.0
+			"print": false
 		}
 	]
 }

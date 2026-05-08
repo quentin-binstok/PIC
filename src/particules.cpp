@@ -87,7 +87,7 @@ float kernel(float r) {
 }
 
 float kernel_grad(float r) {
-    if (0<= r && r <= 1)
+    if (0 <= r && r <= 1)
         return -1;
     if (-1 <= r && r <= 0)
         return 1;
@@ -117,7 +117,6 @@ void initialize_particles(particle_field *particles, scalar_field *dom,
     int nx = dom->nx, ny = dom->ny;
     float dx = dom->dx;
 
-    int nb_not_fluid_cases = 0;
     int current_id = 0;
 
     particles->xyz.resize(2 * density * nx * ny);
@@ -165,9 +164,6 @@ void initialize_particles(particle_field *particles, scalar_field *dom,
 
                     current_id++;
                 }
-
-            } else {
-                nb_not_fluid_cases++;
             }
         }
     }
@@ -198,12 +194,13 @@ void remove_particle(particle_field *particles, int p) {
 
     if (p != last) {
         // Swap xyz (2 components per particle)
-        std::swap(particles->xyz[2 * p],     particles->xyz[2 * last]);
+        std::swap(particles->xyz[2 * p], particles->xyz[2 * last]);
         std::swap(particles->xyz[2 * p + 1], particles->xyz[2 * last + 1]);
 
         // Swap velocity (2 components per particle)
-        std::swap(particles->velocity[2 * p],     particles->velocity[2 * last]);
-        std::swap(particles->velocity[2 * p + 1], particles->velocity[2 * last + 1]);
+        std::swap(particles->velocity[2 * p], particles->velocity[2 * last]);
+        std::swap(particles->velocity[2 * p + 1],
+                  particles->velocity[2 * last + 1]);
 
         /* // Swap B (4 components per particle)
         std::swap(particles->B[4 * p],     particles->B[4 * last]);
@@ -216,18 +213,18 @@ void remove_particle(particle_field *particles, int p) {
         std::swap(particles->C[4 * p + 2], particles->C[4 * last + 2]);
         std::swap(particles->C[4 * p + 3], particles->C[4 * last + 3]); */
 
-        std::swap(particles->ix[3 * p],     particles->ix[3 * last]);
+        std::swap(particles->ix[3 * p], particles->ix[3 * last]);
         std::swap(particles->ix[3 * p + 1], particles->ix[3 * last + 1]);
         std::swap(particles->ix[3 * p + 2], particles->ix[3 * last + 2]);
 
-        std::swap(particles->iy[3 * p],     particles->iy[3 * last]);
+        std::swap(particles->iy[3 * p], particles->iy[3 * last]);
         std::swap(particles->iy[3 * p + 1], particles->iy[3 * last + 1]);
         std::swap(particles->iy[3 * p + 2], particles->iy[3 * last + 2]);
 
-        std::swap(particles->bx[2 * p],     particles->bx[2 * last]);
+        std::swap(particles->bx[2 * p], particles->bx[2 * last]);
         std::swap(particles->bx[2 * p + 1], particles->bx[2 * last + 1]);
 
-        std::swap(particles->by[2 * p],     particles->by[2 * last]);
+        std::swap(particles->by[2 * p], particles->by[2 * last]);
         std::swap(particles->by[2 * p + 1], particles->by[2 * last + 1]);
 
         std::swap(particles->id[p], particles->id[last]);
@@ -236,7 +233,8 @@ void remove_particle(particle_field *particles, int p) {
 
     // Remove last N elements (all O(1))
     particles->xyz.erase(particles->xyz.end() - 2, particles->xyz.end());
-    particles->velocity.erase(particles->velocity.end() - 2, particles->velocity.end());
+    particles->velocity.erase(particles->velocity.end() - 2,
+                              particles->velocity.end());
     /* particles->B.erase(particles->B.end() - 4, particles->B.end()); */
     /* particles->C.erase(particles->C.end() - 4, particles->C.end()); */
     particles->ix.erase(particles->ix.end() - 3, particles->ix.end());
@@ -296,84 +294,88 @@ int check_particles(particle_field *particles, scalar_field *dom, Metrics &m,
     return EXIT_SUCCESS;
 }
 
-void compute_coeff(particle_field *particles, scalar_field *dom, scalar_field *vx, scalar_field *vy,
-    Metrics &m, int p){
+void compute_coeff(particle_field *particles, scalar_field *dom,
+                   scalar_field *vx, scalar_field *vy, Metrics &m, int p) {
     int nx = vx->nx, ny = vx->ny;
     float dx = vx->dx;
 
-    float xp = particles->xyz[2*p];
-    float yp = particles->xyz[2*p+1];
+    float xp = particles->xyz[2 * p];
+    float yp = particles->xyz[2 * p + 1];
 
     float new_u = 0.0f, new_v = 0.0f;
     float bx0 = 0.0f, bx1 = 0.0f;
     float by0 = 0.0f, by1 = 0.0f;
 
-    float Dx00=0, Dx01=0, Dx11=0;
-    float Dy00=0, Dy01=0, Dy11=0;
+    float Dx00 = 0, Dx01 = 0, Dx11 = 0;
+    float Dy00 = 0, Dy01 = 0, Dy11 = 0;
 
     // --- X faces ---
-    int i0 = (int)floor(xp/dx - 0.5f);
-    int j0 = (int)floor(yp/dx);
+    int i0 = (int)floor(xp / dx - 0.5f);
+    int j0 = (int)floor(yp / dx);
 
-    for (int j = j0; j <= j0+1; ++j){
-        for (int i = i0; i <= i0+1; ++i) {
+    for (int j = j0; j <= j0 + 1; ++j) {
+        for (int i = i0; i <= i0 + 1; ++i) {
 
-            if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
+            if (i < 0 || j < 0 || i >= nx || j >= ny)
+                continue;
 
-            float xf = (i + 0.5f)*dx;
-            float yf = j*dx;
-            float w = kernel((xp-xf)/dx)*kernel((yp-yf)/dx);
-            if (w == 0) continue;
+            float xf = (i + 0.5f) * dx;
+            float yf = j * dx;
+            float w = kernel((xp - xf) / dx) * kernel((yp - yf) / dx);
+            if (w == 0)
+                continue;
 
             float ox = xf - xp;
             float oy = yf - yp;
 
-            float vi = vx->values[j*nx+i];
+            float vi = vx->values[j * nx + i];
 
             new_u += w * vi;
             bx0 += w * vi * ox;
             bx1 += w * vi * oy;
 
-            Dx00 += w * ox*ox;
-            Dx01 += w * ox*oy;
-            Dx11 += w * oy*oy;
+            Dx00 += w * ox * ox;
+            Dx01 += w * ox * oy;
+            Dx11 += w * oy * oy;
         }
     }
 
     // --- Y faces ---
-    i0 = (int)floor(xp/dx);
-    j0 = (int)floor(yp/dx - 0.5f);
+    i0 = (int)floor(xp / dx);
+    j0 = (int)floor(yp / dx - 0.5f);
 
-    for (int j = j0; j <= j0+1; ++j){
-        for (int i = i0; i <= i0+1; ++i) {
+    for (int j = j0; j <= j0 + 1; ++j) {
+        for (int i = i0; i <= i0 + 1; ++i) {
 
-            if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
+            if (i < 0 || j < 0 || i >= nx || j >= ny)
+                continue;
 
-            float xf = i*dx;
-            float yf = (j + 0.5f)*dx;
-            float w = kernel((xp-xf)/dx)*kernel((yp-yf)/dx);
-            if (w == 0) continue;
+            float xf = i * dx;
+            float yf = (j + 0.5f) * dx;
+            float w = kernel((xp - xf) / dx) * kernel((yp - yf) / dx);
+            if (w == 0)
+                continue;
 
             float ox = xf - xp;
             float oy = yf - yp;
 
-            float vi = vy->values[j*nx+i];
+            float vi = vy->values[j * nx + i];
 
             new_v += w * vi;
             by0 += w * vi * ox;
             by1 += w * vi * oy;
 
-            Dy00 += w * ox*ox;
-            Dy01 += w * ox*oy;
-            Dy11 += w * oy*oy;
+            Dy00 += w * ox * ox;
+            Dy01 += w * ox * oy;
+            Dy11 += w * oy * oy;
         }
     }
-    particles->velocity[2*p]   = new_u;
-    particles->velocity[2*p+1] = new_v;
-    particles->bx[2*p]   = bx0;
-    particles->bx[2*p+1] = bx1;
-    particles->by[2*p]   = by0;
-    particles->by[2*p+1] = by1;
+    particles->velocity[2 * p] = new_u;
+    particles->velocity[2 * p + 1] = new_v;
+    particles->bx[2 * p] = bx0;
+    particles->bx[2 * p + 1] = bx1;
+    particles->by[2 * p] = by0;
+    particles->by[2 * p + 1] = by1;
 
     int i = std::max(0, std::min(nx - 1, (int)(xp / dx)));
     int j = std::max(0, std::min(ny - 1, (int)(yp / dx)));
@@ -384,39 +386,45 @@ void compute_coeff(particle_field *particles, scalar_field *dom, scalar_field *v
     float top_cell = GET(dom, i, j + 1);
 
     // Invert D (Eq. 6)
-    float detDx = Dx00*Dx11 - Dx01*Dx01;
-    float detDy = Dy00*Dy11 - Dy01*Dy01;
+    float detDx = Dx00 * Dx11 - Dx01 * Dx01;
+    float detDy = Dy00 * Dy11 - Dy01 * Dy01;
 
     if (detDx < 1e-15f) {
-        particles->ix[3*p+0] = 0.0f;
-        particles->ix[3*p+1] = 0.0f;
-        particles->ix[3*p+2] = 0.0f;
+        particles->ix[3 * p + 0] = 0.0f;
+        particles->ix[3 * p + 1] = 0.0f;
+        particles->ix[3 * p + 2] = 0.0f;
         m.singularity_count++;
-    } else if (cell_type == DIRICHLET || left_cell == DIRICHLET || right_cell == DIRICHLET || bottom_cell == DIRICHLET || top_cell == DIRICHLET){ // avoid singularity in non-liquid cells (treat as PIC)
-        particles->ix[3*p   ] =  4.0f/(dx*dx);
-        particles->ix[3*p + 1] =  0.0f;
-        particles->ix[3*p + 2] =  4.0f/(dx*dx);
+    } else if (cell_type == DIRICHLET || left_cell == DIRICHLET ||
+               right_cell == DIRICHLET || bottom_cell == DIRICHLET ||
+               top_cell == DIRICHLET) { // avoid singularity in non-liquid cells
+                                        // (treat as PIC)
+        particles->ix[3 * p] = 4.0f / (dx * dx);
+        particles->ix[3 * p + 1] = 0.0f;
+        particles->ix[3 * p + 2] = 4.0f / (dx * dx);
         m.dirichlet++;
     } else {
-        particles->ix[3*p+0] =  Dx11/detDx;
-        particles->ix[3*p+1] = -Dx01/detDx;
-        particles->ix[3*p+2] =  Dx00/detDx;
+        particles->ix[3 * p + 0] = Dx11 / detDx;
+        particles->ix[3 * p + 1] = -Dx01 / detDx;
+        particles->ix[3 * p + 2] = Dx00 / detDx;
     }
 
     if (detDy < 1e-15f) {
-        particles->iy[3*p+0] = 0.0f;
-        particles->iy[3*p+1] = 0.0f;
-        particles->iy[3*p+2] = 0.0f;
+        particles->iy[3 * p + 0] = 0.0f;
+        particles->iy[3 * p + 1] = 0.0f;
+        particles->iy[3 * p + 2] = 0.0f;
         m.singularity_count++;
-    } else if (cell_type == DIRICHLET || left_cell == DIRICHLET || right_cell == DIRICHLET || bottom_cell == DIRICHLET || top_cell == DIRICHLET){ // avoid singularity in non-liquid cells (treat as PIC)
-        particles->iy[3*p   ] =  4.0f/(dx*dx);
-        particles->iy[3*p + 1] =  0.0f;
-        particles->iy[3*p + 2] =  4.0f/(dx*dx);
+    } else if (cell_type == DIRICHLET || left_cell == DIRICHLET ||
+               right_cell == DIRICHLET || bottom_cell == DIRICHLET ||
+               top_cell == DIRICHLET) { // avoid singularity in non-liquid cells
+                                        // (treat as PIC)
+        particles->iy[3 * p] = 4.0f / (dx * dx);
+        particles->iy[3 * p + 1] = 0.0f;
+        particles->iy[3 * p + 2] = 4.0f / (dx * dx);
         m.dirichlet++;
     } else {
-        particles->iy[3*p+0] =  Dy11/detDy;
-        particles->iy[3*p+1] = -Dy01/detDy;
-        particles->iy[3*p+2] =  Dy00/detDy;
+        particles->iy[3 * p + 0] = Dy11 / detDy;
+        particles->iy[3 * p + 1] = -Dy01 / detDy;
+        particles->iy[3 * p + 2] = Dy00 / detDy;
     }
 }
 
@@ -424,9 +432,9 @@ void compute_coeff(particle_field *particles, scalar_field *dom, scalar_field *v
  @brief fills the cell (i,j) with particles until imposed_density
 */
 void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
-              scalar_field *vy, scalar_field *dom, scalar_field *T,
-              int imposed_density, std::vector<int> &density, float dt,
-              RNG &rng, Metrics &m, std::ofstream &log_file) {
+               scalar_field *vy, scalar_field *dom, scalar_field *T,
+               int imposed_density, std::vector<int> &density, float dt,
+               RNG &rng, Metrics &m, std::ofstream &log_file) {
     int nx = vx->nx;
     int ny = vx->ny;
     float dx = vx->dx;
@@ -504,8 +512,7 @@ void refill_domain(particle_field *particles, scalar_field *dom,
                    scalar_field *vx, scalar_field *vy, scalar_field *T,
                    std::vector<int> &density, int particle_density, bool refill,
                    float creation_rate, float dt, RNG &rng, Metrics &m,
-                   std::ofstream &log_file)
-{
+                   std::ofstream &log_file) {
     LOG_INFO(log_file, "Refilling domain");
 
     int nx = dom->nx;
@@ -527,17 +534,23 @@ void refill_domain(particle_field *particles, scalar_field *dom,
                 float bottom_cell = GET(dom, i, j - 1);
                 float top_cell = GET(dom, i, j + 1);
                 if (refill && cell_density < particle_density) {
-                    if (left_cell == AIR || right_cell == AIR || bottom_cell == AIR || top_cell == AIR) {
-                        float n = dt * particle_density * GET(vx, i, j)/dx; // heuristic: more particles if flow is strong
+                    if (left_cell == AIR || right_cell == AIR ||
+                        bottom_cell == AIR || top_cell == AIR) {
+                        float n =
+                            dt * particle_density * GET(vx, i, j) /
+                            dx; // heuristic: more particles if flow is strong
                         int target_number = (int)n;
 
 #pragma omp critical
-                        fill_cell(i, j, particles, vx, vy, dom, T, target_number, density,
-                                dt, rng, m, log_file);
-                        LOG_INFO(log_file, "Refilling cell (" << i << ", " << j << ") with " << target_number << " particles");
+                        fill_cell(i, j, particles, vx, vy, dom, T,
+                                  target_number, density, dt, rng, m, log_file);
+                        LOG_INFO(log_file, "Refilling cell (" << i << ", " << j
+                                                              << ") with "
+                                                              << target_number
+                                                              << " particles");
                     }
                 }
-            } 
+            }
 
             // --- DIRICHLET: inflow ---
             if (cell_type == DIRICHLET) {
@@ -546,8 +559,8 @@ void refill_domain(particle_field *particles, scalar_field *dom,
                 int target_number = (int)n;
 
 #pragma omp critical
-                fill_cell(i, j, particles, vx, vy, dom, T, target_number, density,
-                          dt, rng, m, log_file);
+                fill_cell(i, j, particles, vx, vy, dom, T, target_number,
+                          density, dt, rng, m, log_file);
             }
 
             // --- LIQUID cells ---
@@ -555,8 +568,8 @@ void refill_domain(particle_field *particles, scalar_field *dom,
 
                 if (refill && cell_density < particle_density) {
 #pragma omp critical
-                    fill_cell(i, j, particles, vx, vy, dom, T, particle_density, density,
-                              dt, rng, m, log_file);
+                    fill_cell(i, j, particles, vx, vy, dom, T, particle_density,
+                              density, dt, rng, m, log_file);
                 } else if (cell_density < 1) {
                     SET(dom, i, j, AIR);
                 }
@@ -573,4 +586,3 @@ void refill_domain(particle_field *particles, scalar_field *dom,
         }
     }
 }
-
