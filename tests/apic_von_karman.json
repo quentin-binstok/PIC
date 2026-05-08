@@ -1,33 +1,18 @@
 {
-	"solver": "pic",
+	"solver": "apic",
 	"iteration_algo": "SOR",
 	"sampling_rate": 1,
 	"log_file": "log.txt",
-	"metrics_file": "metrics_PIC_VK.csv",
-	"dir": "pic_von_karman",
-	"flip": 0.95,
+	"metrics_file": "metrics_APIC_VK.csv",
+	"dir": "apic_von_karman",
 
 	"grid": [200, 100],
 	"space_steps": 5e-3,
-	"nt": 10000,
+	"nt": 500,
 	"delta_t": 0.002,
 	"tol": 1e-3,
-	"tol_therm": 1e-5,
 	"max_iter": 1e5,
 	"rho": 1000.0,
-
-	"thermal": true,
-	"c": 4180.0,
-	"k": 6,
-	"beta": 2.5e-4,
-	"init_temperature": 310,
-	"T0": 293.15,
-	"rho_sol": 7850,
-	"c_sol": 490,
-	"k_sol": 500,
-	"rho_air": 1.2,
-	"c_air": 1000,
-	"k_air": 0.025,
 
 	"gravity": false,
 	"g": 9.81,
@@ -36,7 +21,7 @@
 		{
 			"side": 0,
 			"type": 3.0,
-			"speed_x": 0.2
+			"speed_x": 1.0
 		},
 		{
 			"side": 1,
@@ -56,37 +41,6 @@
 		{
 			"center": [50, 50],
 			"radius": 10
-		}
-	],
-
-	"heat_gen": [
-		{
-			"center": [50, 50],
-			"radius": 10,
-			"value": 10000000.0
-		}
-	],
-
-	"thermal_bcs": [
-		{
-			"side": "left",
-			"type": "DIRICHLET",
-			"val": 310
-		},
-		{
-			"side": "right",
-			"type": "NEUMANN",
-			"val": 0
-		},
-		{
-			"side": "top",
-			"type": "NEUMANN",
-			"val": 0
-		},
-		{
-			"side": "bottom",
-			"type": "NEUMANN",
-			"val": 0
 		}
 	],
 

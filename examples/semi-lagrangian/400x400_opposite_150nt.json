@@ -7,10 +7,10 @@
 	"delta_t": 0.1,
 	"sampling_rate": 1,
 	"rho": 1000.0,
-	"tol": 2.5e-5,
+	"tol": 1e-3,
 	"max_iter": 1e5,
 	"log_file": "log.txt",
-	"bc": 1.0,
+	"dir": "SL_400x400_opposite_150nt",
 	"ic_vx": [
 		{
 			"tl": [90, 150],
@@ -21,6 +21,25 @@
 			"tl": [210, 150],
 			"br": [310, 250],
 			"value": -5.0
+		}
+	],
+
+	"bc": [
+		{
+			"side": 0,
+			"type": 1.0
+		},
+		{
+			"side": 1,
+			"type": 1.0
+		},
+		{
+			"side": 2,
+			"type": 1.0
+		},
+		{
+			"side": 3,
+			"type": 1.0
 		}
 	]
 }

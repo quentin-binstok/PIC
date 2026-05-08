@@ -1,36 +1,35 @@
 {
 	"solver": "apic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 5,
+	"sampling_rate": 10,
 	"log_file": "log.txt",
-	"metrics_file": "metrics_APIC_VK.csv",
-	"dir": "../VK_normal",
+	"metrics_file": "metrics_APIC_DB.csv",
+	"dir": "apic_dam_break",
 	"flip": 0.0,
 
-	"grid": [200, 100],
+	"grid": [100, 100],
 	"space_steps": 5e-3,
-	"nt": 2500,
+	"nt": 5000,
 	"delta_t": 0.001,
 	"tol": 1e-2,
 	"max_iter": 1e5,
 	"rho": 1000.0,
 
-	"gravity": false,
+	"gravity": true,
 	"g": 9.81,
 
 	"bc": [
 		{
 			"side": 0,
-			"type": 3.0,
-			"speed_x": 1.0
+			"type": 1.0
 		},
 		{
 			"side": 1,
-			"type": 2.0
+			"type": 1.0
 		},
 		{
 			"side": 2,
-			"type": 1.0
+			"type": 2.0
 		},
 		{
 			"side": 3,
@@ -38,19 +37,25 @@
 		}
 	],
 
-	"ic_cylinders": [
+	"ic_cylinders": [],
+
+	"ic_cell": [
 		{
-			"center": [50, 50],
-			"radius": 10
+			"tl": [1, 1],
+			"br": [98, 99],
+			"value": 2.0
+		},
+		{
+			"tl": [1, 1],
+			"br": [49, 49],
+			"value": 0.0
 		}
 	],
 
-	"ic_cell": [],
-
 	"particle_density": 25,
-	"refill": true,
+	"refill": false,
 
-	"metrics" : [
+	"metrics": [
 		{
 			"header": "vx",
 			"idx": [20, 50],

@@ -21,9 +21,14 @@ int particles_temp_to_grid(particle_field *particles, scalar_field *T,
 int grid_temp_to_particles(particle_field *particles, scalar_field *T,
                            std::ofstream &log_file);
 
-void apply_thermal_eq(scalar_field *T, scalar_field *T_temp, therm_bc *bcs,
-                      float dt, float c, float rho, float k, float tol,
-                      int max_iter, std::ofstream &log_file);
+int initialize_thermal_generation(scalar_field *r, json &data,
+                                  std::ofstream &log_file);
+
+void apply_thermal_eq(scalar_field *T, scalar_field *T_temp, scalar_field *r,
+                      scalar_field *dom, therm_bc *bcs, float dt, float c_liq,
+                      float c_air, float c_sol, float rho_liq, float rho_air,
+                      float rho_sol, float k_liq, float k_air, float k_sol,
+                      float tol, int max_iter, std::ofstream &log_file);
 
 void build_thermal_bc(therm_bc *bcs, json &data, std::ofstream &log_file);
 

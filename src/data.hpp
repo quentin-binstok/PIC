@@ -1,6 +1,7 @@
 #ifndef __SOLVER_DATA__
 #define __SOLVER_DATA__
 #include <filesystem>
+#include <optional>
 #include <random>
 #include <string>
 #include <vector>
@@ -53,8 +54,13 @@ typedef struct _particle_field {
     std::vector<float> velocity; // idem
     std::vector<float> T;
     std::vector<int> id;
+    std::vector<float>
+        ix; // for APIC, the interpolation of the velocity gradient
+    std::vector<float> iy;
+    std::vector<float> bx; // for APIC, the affine part of the velocity
+    std::vector<float> by;
     /* std::vector<float> B; */
-    std::vector<float> C; // for APIC affine matrix
+    /* std::vector<float> C; // for APIC affine matrix */
 } particle_field;
 
 struct RNG {
@@ -63,9 +69,9 @@ struct RNG {
     std::uniform_real_distribution<float> prob;
     std::uniform_real_distribution<float> birth;
 
-    RNG(float dx, float dt)
-        : gen(std::random_device{}()), jitter(-0.5f * dx, 0.5f * dx),
-          prob(0.0f, 1.0f), birth(0.0f, dt) {}
+    RNG(float dx, float dt, std::optional<uint32_t> seed = std::nullopt)
+        : gen(seed ? *seed : std::random_device{}()),
+          jitter(-0.5f * dx, 0.5f * dx), prob(0.0f, 1.0f), birth(0.0f, dt) {}
 };
 
 /*
