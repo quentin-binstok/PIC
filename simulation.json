@@ -1,15 +1,15 @@
 {
-	"solver": "pic",
+	"solver": "apic",
 	"iteration_algo": "SOR",
 	"sampling_rate": 1,
 	"log_file": "log.txt",
 	"metrics_file": "metrics_PIC_VK.csv",
-	"dir": "pic_von_karman",
+	"dir": "apic_von_karman",
 	"flip": 0.95,
 
 	"grid": [200, 100],
 	"space_steps": 5e-3,
-	"nt": 10000,
+	"nt": 500,
 	"delta_t": 0.002,
 	"tol": 1e-3,
 	"tol_therm": 1e-5,
@@ -36,7 +36,7 @@
 		{
 			"side": 0,
 			"type": 3.0,
-			"speed_x": 0.2
+			"speed_x": 2.0
 		},
 		{
 			"side": 1,

@@ -399,7 +399,7 @@ int solver_apic(json &data, std::ofstream &log_file,
         initialize_thermal_generation(r, data, log_file);
 
     std::vector<float> speed_condition;
-    therm_bc *therm_bcs = (therm_bc *)malloc(sizeof(therm_bc));
+    therm_bc *therm_bcs = new therm_bc;
 
     // Applying the initial conditions
     initialize_speed(vx, dom, data, "ic_vx", log_file);
@@ -407,7 +407,6 @@ int solver_apic(json &data, std::ofstream &log_file,
     boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
     initialize_domain(dom, data, "ic_cell", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
-    initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green", log_file);
 
     if (thermal)
         build_thermal_bc(therm_bcs, data, log_file);
@@ -598,7 +597,7 @@ int solver_apic(json &data, std::ofstream &log_file,
     scalar_field_free(kern_sum_T, log_file);
 
     delete particles;
-    free(therm_bcs);
+    delete therm_bcs;
 
     auto t1 = std::chrono::high_resolution_clock::now();
     double seconds = std::chrono::duration<double>(t1 - t0).count();
