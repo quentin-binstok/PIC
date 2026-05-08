@@ -13,3 +13,4 @@ todo.md
 *.mp4
 .clang-format
 .vscode
+__pycache__

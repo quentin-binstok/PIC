@@ -628,7 +628,7 @@ void sine_surface(json &data, scalar_field *dom, std::ofstream &log_file) {
     int nx = dom->nx;
     int ny = dom->ny;
 
-    for (int i = 1; i < nx; i++) {
+    for (int i = 1; i < nx - 1; i++) {
         int h =
             amp * std::sin(2 * 3.141592 * freq * (float)i / (float)nx) + height;
         for (int j = 1; j < h; j++) {

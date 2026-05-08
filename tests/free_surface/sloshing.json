@@ -3,14 +3,14 @@
 	"iteration_algo": "SOR",
 	"sampling_rate": 1,
 	"log_file": "log.txt",
-	"metrics_file": "metrics_slushing.csv",
-	"dir": "slushing",
-	"flip": 1.0,
+	"metrics_file": "metrics_sloshing.csv",
+	"dir": "sloshing",
+	"flip": 0.95,
 
 	"grid": [200, 200],
-	"space_steps": 0.025,
+	"space_steps": 0.003,
 	"nt": 1000,
-	"delta_t": 0.0015,
+	"delta_t": 0.01,
 	"tol": 1e-3,
 	"max_iter": 1e5,
 	"rho": 1000.0,
@@ -29,7 +29,7 @@
 		},
 		{
 			"side": 2,
-			"type": 2.0
+			"type": 1.0
 		},
 		{
 			"side": 3,
@@ -49,9 +49,9 @@
 
 	"special": {
 		"type": "sine",
-		"height": 75,
-		"amp": 20,
-		"freq": 1.0
+		"height": 30,
+		"amplitude": 15,
+		"frequency": 1.0
 	},
 
 	"particle_density": 25,
@@ -63,8 +63,28 @@
 			"print": false
 		},
 		{
-			"header": "depth",
-			"idx": 125,
+			"header": "pressure",
+			"idx": [1, 10],
+			"print": false
+		},
+		{
+			"header": "pressure",
+			"idx": [1, 23],
+			"print": false
+		},
+		{
+			"header": "pressure",
+			"idx": [1, 37],
+			"print": false
+		},
+		{
+			"header": "pressure",
+			"idx": [1, 50],
+			"print": false
+		},
+		{
+			"header": "pressure",
+			"idx": [1, 63],
 			"print": false
 		}
 	]

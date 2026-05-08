@@ -258,10 +258,11 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     if (data.contains("special")) {
         if (data["special"]["type"] == "sine")
             sine_surface(data, dom, log_file);
-        if (data["special"]["type"] == "taylor green")
+        else if (data["special"]["type"] == "taylor green")
             initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green",
                                            log_file);
     }
+    LOG_INFO(log_file, "is sine good");
 
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < (int)ny; j++)

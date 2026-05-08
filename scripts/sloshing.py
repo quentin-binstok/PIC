@@ -1,7 +1,3 @@
-"""
-Small script to compare dam break results with Ritter
-"""
-
 import numpy as np
 import matplotlib.pyplot as plt
 from pandas import read_csv
@@ -11,35 +7,19 @@ import pathlib
 import copy
 
 
-def ritter_h(x: float, h0: float, lo: float, t: np.array, g: float = 9.81):
-    c0 = np.sqrt(g * h0)
-    h = np.zeros_like(t, dtype=float)
-
-    for i in range(len(t)):
-        print(lo + 2 * c0 * t[i] - x)
-        if x < lo - c0 * t[i]:
-            h[i] = h0
-        elif x <= lo + 2 * c0 * t[i]:
-            h[i] = (1 / (9 * g)) * (2 * c0 - (x - lo) / t[i]) ** 2
-        else:
-            h[i] = 0
-
-    return h
-
-
 def build_folder(args):
     """
     Builds the folder of json to launch
     """
 
-    temp_folder = "dam_break_sim"
+    temp_folder = "sloshing_sim"
     pathlib.Path.mkdir(temp_folder)
     temp_folder = pathlib.Path(temp_folder)
 
     with open(args.input, "r") as f_json:
         base_data = json.load(f_json)
 
-    with open(temp_folder / f"dam_break_base.json", "w") as file:
+    with open(temp_folder / f"sloshing_base.json", "w") as file:
         json.dump(base_data, file)
 
     base_dx = base_data["space_steps"]
@@ -48,7 +28,8 @@ def build_folder(args):
     base_nt = base_data["nt"]
     base_dt = base_data["delta_t"]
     base_flip = base_data["flip"]
-    base_nx_liq, base_ny_liq = base_data["ic_cell"][1]["br"]
+    base_height = base_data["special"]["height"]
+    base_amp = base_data["special"]["amplitude"]
 
     nx_arr = np.linspace(base_nx / 2, base_nx * 10, 10, dtype=int)
     for nx in nx_arr:
@@ -58,27 +39,31 @@ def build_folder(args):
         work_data = copy.deepcopy(base_data)
         work_data["grid"] = [nx, ny]
         work_data["ic_cell"][0]["br"] = [nx - 2, ny - 2]
-        work_data["ic_cell"][1]["br"] = [
-            int(base_nx_liq * ratio),
-            int(base_ny_liq * ratio),
-        ]
+
         dx = base_dx / ratio
         work_data["space_steps"] = dx
-        work_data["metrics"][1]["idx"] = [int(nx - 2), 1]
+        work_data["metrics"][1]["idx"] = [1, int(0.03 / dx) + 1]
         work_data["metrics"][2]["idx"] = [
-            int(nx - 2),
-            int(0.015 / dx) + 1,
+            1,
+            int(0.07 / dx) + 1,
         ]
         work_data["metrics"][3]["idx"] = [
-            int(nx - 2),
-            int((0.03 / dx)) + 1,
+            1,
+            int((0.11 / dx)) + 1,
         ]
         work_data["metrics"][4]["idx"] = [
-            int(nx - 2),
-            int(0.08 / dx) + 1,
+            1,
+            int(0.15 / dx) + 1,
+        ]
+        work_data["metrics"][5]["idx"] = [
+            1,
+            int(0.19 / dx) + 1,
         ]
 
-        with open(temp_folder / f"dam_break_nx_{nx}.json", "w") as file:
+        work_data["special"]["height"] = int(base_height * ratio)
+        work_data["special"]["amplitude"] = int(base_amp * ratio)
+
+        with open(temp_folder / f"sloshing_nx_{nx}.json", "w") as file:
             json.dump(work_data, file)
 
     nt_arr = np.linspace(base_nt / 2, base_nt * 10, 10, dtype=int)
@@ -87,14 +72,16 @@ def build_folder(args):
         work_data = copy.deepcopy(base_data)
         work_data["delta_t"] = base_nt * base_dt / nt
         work_data["nt"] = nt
-        with open(temp_folder / f"dam_break_nt_{nt}.json", "w") as file:
+        with open(temp_folder / f"sloshing_nt_{nt}.json", "w") as file:
             json.dump(work_data, file)
 
     flip_arr = [0.0, 0.95, 0.98, 1.0]
     for flip in flip_arr:
+        if flip == base_flip:
+            continue
         work_data = copy.deepcopy(base_data)
         work_data["flip"] = flip
-        with open(temp_folder / f"dam_break_flip_{flip}.json", "w") as file:
+        with open(temp_folder / f"sloshing_flip_{flip}.json", "w") as file:
             json.dump(work_data, file)
 
     return temp_folder
@@ -113,7 +100,7 @@ def main():
     parser.add_argument(
         "-i",
         "--input",
-        help="The base dam break file",
+        help="The base sloshing file",
         required=True,
         type=pathlib.Path,
     )
