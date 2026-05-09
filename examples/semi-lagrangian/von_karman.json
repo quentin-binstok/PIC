@@ -1,10 +1,10 @@
 {
-	"solver": "pic",
+	"solver": "semi-lagrangian",
 	"iteration_algo": "SOR",
 	"sampling_rate": 5,
 	"log_file": "log.txt",
-	"dir": "pic_von_karman_flip",
-	"flip": 1.0,
+	"dir": "SL_von_karman",
+	"flip": 0.0,
 
 	"grid": [200, 200],
 	"space_steps": 5e-3,
@@ -14,7 +14,7 @@
 	"max_iter": 1e5,
 	"rho": 1000.0,
 
-	"gravity": true,
+	"gravity": false,
 	"g": 9.81,
 
 	"bc": [
@@ -42,13 +42,5 @@
 			"center": [50, 100],
 			"radius": 15
 		}
-	],
-
-	"ic_cell": [],
-
-	"particle_density": 25,
-	"creation_rate": 5000,
-	"particle_percentage_limit": 0.0,
-
-	"fields": []
+	]
 }

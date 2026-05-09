@@ -9,7 +9,7 @@
 
 	"grid": [100, 50],
 	"space_steps": 5e-3,
-	"nt": 5000,
+	"nt": 500,
 	"delta_t": 0.05,
 	"tol": 4e-4,
 	"tol_therm": 1e-6,

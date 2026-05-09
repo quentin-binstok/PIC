@@ -3,6 +3,7 @@
 	"iteration_algo": "SOR",
 	"sampling_rate": 1,
 	"log_file": "log_squares.txt",
+	"dir": "SL_500x500_user_fields",
 
 	"grid": [500, 500],
 	"space_steps": 0.1,
@@ -12,7 +13,24 @@
 	"max_iter": 2e5,
 	"rho": 1000.0,
 
-	"bc": 1.0,
+	"bc": [
+		{
+			"side": 0,
+			"type": 1.0
+		},
+		{
+			"side": 1,
+			"type": 1.0
+		},
+		{
+			"side": 2,
+			"type": 1.0
+		},
+		{
+			"side": 3,
+			"type": 1.0
+		}
+	],
 
 	"ic_vx": [
 		{

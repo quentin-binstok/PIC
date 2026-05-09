@@ -302,6 +302,7 @@ int solver_apic(json &data, std::ofstream &log_file,
     float k = data.value("k", 1.0f);
     RNG rng(dx, dt);
     float mass = rho * (dx * dx) / particle_density;
+    bool thermal = data.value("thermal", false);
 
     // Computing the creation rate
     float speed_x = 0.0f;
@@ -401,8 +402,9 @@ int solver_apic(json &data, std::ofstream &log_file,
                        work_dir);
     write_manifest_vtk(dom->name, dt, nt, sampling_rate, 1, 0, log_file,
                        work_dir);
-    write_manifest_vtk(T->name, dt, nt, sampling_rate, 1, 0, log_file,
-                       work_dir);
+    if (thermal)
+        write_manifest_vtk(T->name, dt, nt, sampling_rate, 1, 0, log_file,
+                           work_dir);
 
     // Initial state
     write_scalar_vtk(vx, 0, 0, log_file, work_dir);
@@ -410,7 +412,8 @@ int solver_apic(json &data, std::ofstream &log_file,
     write_scalar_vtk(p, 0, 0, log_file, work_dir);
     write_scalar_vtk(div, 0, 0, log_file, work_dir);
     write_scalar_vtk(dom, 0, 0, log_file, work_dir);
-    write_scalar_vtk(T, 0, 0, log_file, work_dir);
+    if (thermal)
+        write_scalar_vtk(T, 0, 0, log_file, work_dir);
 
     std::vector<int> density(nx * ny, 0);
 
@@ -459,9 +462,9 @@ int solver_apic(json &data, std::ofstream &log_file,
 
         std::fill(density.begin(), density.end(), 0);
         check_particles(particles, dom, m, density, log_file);
-        refill_domain(particles, dom, vx, vy, T, density, particle_density, refill,
-                     creation_rate, dt, rng, m, log_file);
-        
+        refill_domain(particles, dom, vx, vy, T, density, particle_density,
+                      refill, creation_rate, dt, rng, m, log_file);
+
         t2 = std::chrono::high_resolution_clock::now();
 
         if (gravity)
@@ -483,8 +486,9 @@ int solver_apic(json &data, std::ofstream &log_file,
             return EXIT_FAILURE;
         }
 
-        apply_thermal_eq(T, T_temp, therm_bcs, dt, c, rho, k, tol, max_iter,
-                         log_file);
+        if (thermal)
+            apply_thermal_eq(T, T_temp, therm_bcs, dt, c, rho, k, tol, max_iter,
+                             log_file);
 
         project_velocity(p, vx, vy, dom, dx, dt, rho, log_file,
                          speed_condition);
@@ -509,7 +513,8 @@ int solver_apic(json &data, std::ofstream &log_file,
             write_scalar_vtk(p, i, 0, log_file, work_dir);
             write_scalar_vtk(div, i, 0, log_file, work_dir);
             write_scalar_vtk(dom, i, 0, log_file, work_dir);
-            write_scalar_vtk(T, i, 0, log_file, work_dir);
+            if (thermal)
+                write_scalar_vtk(T, i, 0, log_file, work_dir);
 
             write_particles_vtp(particles, i, 0, 2, log_file, work_dir);
         }

@@ -162,6 +162,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     float beta = data.value("beta", 0.01);
     float c = data.value("c", 4.186);
     float k = data.value("k", 1.0f);
+    bool thermal = data.value("thermal", false);
     RNG rng(dx, dt);
 
     // Computing the creation rate
@@ -233,8 +234,16 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
     initialize_domain(dom, data, "ic_cell", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
-    initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green", log_file);
-    build_thermal_bc(therm_bcs, data, log_file);
+
+    if (thermal)
+        build_thermal_bc(therm_bcs, data, log_file);
+
+    if (data.contains("special")) {
+        if (data["special"]["type"] == "sine")
+            sine_surface(data, dom, log_file);
+        if (data["special"]["type"] == "taylor green")
+            initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green", log_file);
+    }
 
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < (int)ny; j++)
@@ -262,8 +271,9 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
                        work_dir);
     write_manifest_vtk(dom->name, dt, nt, sampling_rate, 1, 0, log_file,
                        work_dir);
-    write_manifest_vtk(T->name, dt, nt, sampling_rate, 1, 0, log_file,
-                       work_dir);
+    if (thermal)
+        write_manifest_vtk(T->name, dt, nt, sampling_rate, 1, 0, log_file,
+                           work_dir);
 
     // Initial state
     write_scalar_vtk(vx, 0, 0, log_file, work_dir);
@@ -271,7 +281,8 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     write_scalar_vtk(p, 0, 0, log_file, work_dir);
     write_scalar_vtk(div, 0, 0, log_file, work_dir);
     write_scalar_vtk(dom, 0, 0, log_file, work_dir);
-    write_scalar_vtk(T, 0, 0, log_file, work_dir);
+    if (thermal)
+        write_scalar_vtk(T, 0, 0, log_file, work_dir);
 
     std::vector<int> density(nx * ny, 0);
 
@@ -282,10 +293,15 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
 
     Metrics m;
     std::vector<std::string> headers = build_headers(data["metrics"]);
+<<<<<<< src/pic.cpp
     int singularity = 0;
     int solid_particles = 0;
     int dirichlet = 0;
     m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+=======
+    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, m, data["metrics"],
+                        log_file);
+>>>>>>> src/pic.cpp
     write_header(metrics_file, headers);
     write_metrics(metrics_file, m);
 
@@ -312,7 +328,8 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
 
         particles_speed_to_grid(particles, vx, vy, kern_sum_vx, kern_sum_vy,
                                 log_file);
-        particles_temp_to_grid(particles, T, kern_sum_T, log_file);
+        if (thermal)
+            particles_temp_to_grid(particles, T, kern_sum_T, log_file);
 
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
@@ -326,8 +343,9 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
             return EXIT_FAILURE;
         }
 
-        apply_thermal_eq(T, T_temp, therm_bcs, dt, c, rho, k, tol_therm,
-                         max_iter, log_file);
+        if (thermal)
+            apply_thermal_eq(T, T_temp, therm_bcs, dt, c, rho, k, tol_therm,
+                             max_iter, log_file);
 
         // Needed for FLIP
         std::memcpy(temp_vx->values, vx->values, nx * ny * sizeof(float));
@@ -342,7 +360,8 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
 
         grid_speed_to_particles(particles, vx, vy, temp_vx, temp_vy, flip_param,
                                 log_file);
-        grid_temp_to_particles(particles, T, log_file);
+        if (thermal)
+            grid_temp_to_particles(particles, T, log_file);
 
         // save files
         if (sampling_rate && !(i % sampling_rate)) {
@@ -351,7 +370,8 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
             write_scalar_vtk(p, i, 0, log_file, work_dir);
             write_scalar_vtk(div, i, 0, log_file, work_dir);
             write_scalar_vtk(dom, i, 0, log_file, work_dir);
-            write_scalar_vtk(T, i, 0, log_file, work_dir);
+            if (thermal)
+                write_scalar_vtk(T, i, 0, log_file, work_dir);
 
             write_particles_vtp(particles, i, 0, 2, log_file, work_dir);
         }
@@ -360,10 +380,15 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
 
         std::fill(density.begin(), density.end(), 0);
         check_particles(particles, dom, m, density, log_file);
-        refill_domain(particles, dom, vx, vy, T, density, particle_density, refill,
-                      creation_rate, dt, rng, m, log_file);
+        refill_domain(particles, dom, vx, vy, T, density, particle_density,
+                      refill, creation_rate, dt, rng, m, log_file);
 
+<<<<<<< src/pic.cpp
         m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+=======
+        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, m, data["metrics"],
+                            log_file);
+>>>>>>> src/pic.cpp
         write_metrics(metrics_file, m);
 
         first_loop = false;
