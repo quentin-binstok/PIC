@@ -183,20 +183,20 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     for (auto &bc : data["bc"]) {
         if (bc.contains("speed_x")) {
             if (speed_x == 0) {
-                speed_x = bc["speed_x"].get<float>();
+                speed_x = std::abs(bc["speed_x"].get<float>());
                 continue;
             } else {
                 speed_x /= 2;
-                speed_x += bc["speed_x"].get<float>() / 2;
+                speed_x += std::abs(bc["speed_x"].get<float>()) / 2;
             }
         }
         if (bc.contains("speed_y")) {
             if (speed_y == 0) {
-                speed_y = bc["speed_y"].get<float>();
+                speed_y = std::abs(bc["speed_y"].get<float>());
                 continue;
             } else {
                 speed_y /= 2;
-                speed_y += bc["speed_y"].get<float>() / 2;
+                speed_y += std::abs(bc["speed_y"].get<float>()) / 2;
             }
         }
     }
