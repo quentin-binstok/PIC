@@ -1,0 +1,67 @@
+{
+  "solver": "apic",
+  "iteration_algo": "SOR",
+  "sampling_rate": 50,
+  "log_file": "log.txt",
+  "metrics_file": "metrics_SL_GL.csv",
+  "dir": "Taylor_Green/APIC/nx_200",
+  "flip": 0.0,
+  "grid": [
+    100,
+    100
+  ],
+  "space_steps": 0.00785,
+  "nt": 10000,
+  "delta_t": 0.00235,
+  "tol": 0.01,
+  "max_iter": 100000.0,
+  "rho": 1000.0,
+  "gravity": false,
+  "g": 9.81,
+  "bc": [
+    {
+      "side": 0,
+      "type": 1.0
+    },
+    {
+      "side": 1,
+      "type": 1.0
+    },
+    {
+      "side": 2,
+      "type": 1.0
+    },
+    {
+      "side": 3,
+      "type": 1.0
+    }
+  ],
+  "ic_cylinders": [],
+  "ic_cell": [],
+  "taylor_green": [
+    {
+      "Uinf": 1.0,
+      "wavenumber": 4.0
+    }
+  ],
+  "particle_density": 25,
+  "refill": true,
+  "metrics": [
+    {
+      "header": "vx",
+      "idx": [
+        15,
+        15
+      ],
+      "print": true
+    },
+    {
+      "header": "vy",
+      "idx": [
+        15,
+        15  
+      ],
+      "print": true
+    }
+  ]
+}

@@ -83,7 +83,7 @@ float free_surface_area(scalar_field *dom, float dx);
 float depth(scalar_field *dom, int idx, float dx);
 std::vector<float> computeCoefficients(scalar_field *dom, scalar_field *p, float dx, 
                         float U_inf, float rho, float A_ref, std::ofstream &log_file);
-
+std::vector<float> slice_vertical(scalar_field *vx, int i_fixed, int j_start, int j_end) ;
 void write_metrics(std::ofstream& f, const Metrics& m);
 void write_header(std::ofstream& f, const std::vector<std::string>& headers);
 Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, scalar_field *vy, scalar_field *div, 
@@ -92,5 +92,24 @@ std::vector<std::string> build_headers(const json& metric_data);
 
 
 void sine_surface(json &data, scalar_field *dom, std::ofstream &log_file);
+
+void write_slice_header_vertical(
+    std::ofstream& f,
+    const std::string& field_name,
+    int i_fixed,
+    int j_start,
+    int j_end
+) ;
+void write_slice_vertical_csv(
+    std::ofstream& f,
+    int step,
+    scalar_field* field,
+    int i_fixed,
+    int j_start,
+    int j_end
+) ;
+bool should_write_slice_csv(int step, const json& slice_cfg);
+std::map<std::string, std::ofstream>
+init_slice_csvs(const json& config, const fs::path& work_dir);
 
 #endif

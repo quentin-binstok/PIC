@@ -234,6 +234,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     boundary_condition(vx, vy, dom, speed_condition, data, "bc", log_file);
     initialize_domain(dom, data, "ic_cell", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
+    initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green", log_file);
 
     if (thermal)
         build_thermal_bc(therm_bcs, data, log_file);
@@ -293,17 +294,18 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
 
     Metrics m;
     std::vector<std::string> headers = build_headers(data["metrics"]);
-<<<<<<< src/pic.cpp
+    m.singularity_count = 0;
+    m.particle_in_solid = 0;
+    m.dirichlet = 0;
     int singularity = 0;
     int solid_particles = 0;
     int dirichlet = 0;
     m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
-=======
-    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, m, data["metrics"],
-                        log_file);
->>>>>>> src/pic.cpp
     write_header(metrics_file, headers);
     write_metrics(metrics_file, m);
+    
+    
+    auto slice_files = init_slice_csvs(data, work_dir);
 
     for (unsigned int i = 1; i < nt; i++) {
         // Logging and printing stuff
@@ -383,13 +385,38 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
         refill_domain(particles, dom, vx, vy, T, density, particle_density,
                       refill, creation_rate, dt, rng, m, log_file);
 
-<<<<<<< src/pic.cpp
         m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
-=======
-        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, m, data["metrics"],
-                            log_file);
->>>>>>> src/pic.cpp
         write_metrics(metrics_file, m);
+
+        
+        
+        for (const auto& [key, cfg] : data.items()) {
+                if (key.rfind("slice_", 0) != 0)
+                    continue;
+
+
+                if (!should_write_slice_csv(i, cfg))
+                    continue;
+
+                const std::string field = cfg["field"].get<std::string>();
+                std::ofstream& f = slice_files[key];
+
+                scalar_field* data = nullptr;
+                if (field == "vx") data = vx;
+                else if (field == "vy") data = vy;
+
+                if (!data)
+                    continue;
+
+                write_slice_vertical_csv(
+                    f,
+                    i,
+                    data,
+                    cfg["i"].get<int>(),
+                    cfg["j_start"].get<int>(),
+                    cfg["j_end"].get<int>()
+                );
+            }
 
         first_loop = false;
     }

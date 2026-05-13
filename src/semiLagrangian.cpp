@@ -205,6 +205,9 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file, std::ofstream &m
     m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
     write_header(metrics_file, headers);
     write_metrics(metrics_file, m);
+    
+    
+    auto slice_files = init_slice_csvs(data, work_dir);
 
     // Main time loop
     bool inverted = false;
@@ -260,6 +263,38 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file, std::ofstream &m
         m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
         write_metrics(metrics_file, m);
 
+        
+        
+        for (const auto& [key, cfg] : data.items()) {
+                if (key.rfind("slice_", 0) != 0)
+                    continue;
+
+
+                if (!should_write_slice_csv(i, cfg))
+                    continue;
+
+                const std::string field = cfg["field"].get<std::string>();
+                std::ofstream& f = slice_files[key];
+
+                scalar_field* data = nullptr;
+                if (field == "vx") data = vx;
+                else if (field == "vy") data = vy;
+
+                if (!data)
+                    continue;
+
+                write_slice_vertical_csv(
+                    f,
+                    i,
+                    data,
+                    cfg["i"].get<int>(),
+                    cfg["j_start"].get<int>(),
+                    cfg["j_end"].get<int>()
+                );
+            }
+
+
+
         inverted = !inverted;
         scalar_field *invert_vx = vx;
         scalar_field *invert_vy = vy;
@@ -268,6 +303,13 @@ int solver_semi_lagrangian(json &data, std::ofstream &log_file, std::ofstream &m
         temp_vx = invert_vx;
         temp_vy = invert_vy;
         first_loop = false;
+    }
+
+    
+    for (auto& [key, f] : slice_files) {
+        if (f.is_open()) {
+            f.close();
+        }
     }
 
     // As we're not using objects, we need this

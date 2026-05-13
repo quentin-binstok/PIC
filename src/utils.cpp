@@ -377,7 +377,6 @@ std::vector<float> computeCoefficients(scalar_field *dom, scalar_field *p, float
                 float p_top = GET(p, i, j + 1);
                 Fy -= p_top * dx;   // normal = (0, -1)
             }
-            LOG_INFO(log_file, "Computed forces: " << Fx << ", " << Fy << " at cell (" << i << ", " << j << ")");
         }
     }
 
@@ -388,6 +387,46 @@ std::vector<float> computeCoefficients(scalar_field *dom, scalar_field *p, float
 
     return aero;
 }
+
+
+std::vector<float> slice_vertical(
+    scalar_field *vx,
+    int i_fixed,
+    int j_start,
+    int j_end
+) {
+    std::vector<float> values;
+
+    // Sanity checks
+    j_start = std::max(0, j_start);
+    j_end   = std::min(vx->ny - 1, j_end);
+
+    for (int j = j_start; j <= j_end; ++j) {
+        values.push_back(GET(vx, i_fixed, j));
+    }
+
+    return values;
+}
+
+std::vector<float> slice_horizontal(
+    scalar_field *vx,
+    int j_fixed,
+    int i_start,
+    int i_end
+) {
+    std::vector<float> values;
+
+    // Sanity checks
+    i_start = std::max(0, i_start);
+    i_end   = std::min(vx->nx - 1, i_end);
+
+    for (int i = i_start; i <= i_end; ++i) {
+        values.push_back(GET(vx, i, j_fixed));
+    }
+
+    return values;
+}
+
 
 
 /*
@@ -620,4 +659,81 @@ void sine_surface(json &data, scalar_field *dom, std::ofstream &log_file) {
                 SET(dom, i, j, LIQUID);
         }
     }
+}
+
+
+void write_slice_header_vertical(
+    std::ofstream& f,
+    const std::string& field_name,
+    int i_fixed,
+    int j_start,
+    int j_end
+) {
+    f << "step";
+    for (int j = j_start; j <= j_end; ++j) {
+        f << "," << field_name << "_" << i_fixed << "_" << j;
+    }
+    f << "\n";
+}
+
+void write_slice_vertical_csv(
+    std::ofstream& f,
+    int step,
+    scalar_field* field,
+    int i_fixed,
+    int j_start,
+    int j_end
+) {
+    std::vector<float> slice = slice_vertical(field, i_fixed, j_start, j_end);
+
+    f << step;
+    for (float v : slice) {
+        f << "," << std::scientific << std::setprecision(10) << v;
+    }
+    f << "\n";
+    f.flush();
+}
+
+bool should_write_slice_csv(int step, const json& slice_cfg)
+{
+    if (!slice_cfg["enabled"].get<bool>())
+        return false;
+
+    for (const auto& ts : slice_cfg["timesteps"]) {
+        if (step == ts.get<int>())
+            return true;
+    }
+    return false;
+}
+
+std::map<std::string, std::ofstream>
+init_slice_csvs(const json& config, const fs::path& work_dir)
+{
+    std::map<std::string, std::ofstream> files;
+
+    for (const auto& [key, cfg] : config.items()) {
+        if (key.rfind("slice_", 0) != 0)
+            continue;
+
+
+        if (!cfg.contains("enabled") || !cfg["enabled"].get<bool>())
+            continue;
+
+        std::string field = cfg["field"].get<std::string>();
+        fs::path path = work_dir / cfg["file"].get<std::string>();
+
+        std::ofstream f(path);
+
+        write_slice_header_vertical(
+            f,
+            field,
+            cfg["i"].get<int>(),
+            cfg["j_start"].get<int>(),
+            cfg["j_end"].get<int>()
+        );
+
+        files.emplace(key, std::move(f));
+    }
+
+    return files;
 }
