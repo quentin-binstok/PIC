@@ -13,18 +13,15 @@
 #include <fstream>
 #include <iostream>
 #include <ostream>
+#include <vector>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-
-
-inline int particles_to_grid(
-    particle_field *particles, float mp,
-    scalar_field *vx, scalar_field *vy,
-    scalar_field *mass_x, scalar_field *mass_y,
-    std::ofstream &log_file)
-{
+inline int particles_to_grid(particle_field *particles, float mp,
+                             scalar_field *vx, scalar_field *vy,
+                             scalar_field *mass_x, scalar_field *mass_y,
+                             std::ofstream &log_file) {
     LOG_INFO(log_file, "APIC P->G (paper-faithful)");
 
     int nx = vx->nx, ny = vx->ny;
@@ -33,108 +30,109 @@ inline int particles_to_grid(
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < ny; ++j)
         for (int i = 0; i < nx; ++i) {
-            vx->values[j*nx+i] = 0.0f;
-            vy->values[j*nx+i] = 0.0f;
-            mass_x->values[j*nx+i] = 0.0f;
-            mass_y->values[j*nx+i] = 0.0f;
+            vx->values[j * nx + i] = 0.0f;
+            vy->values[j * nx + i] = 0.0f;
+            mass_x->values[j * nx + i] = 0.0f;
+            mass_y->values[j * nx + i] = 0.0f;
         }
 
 #pragma omp parallel for
     for (int p = 0; p < particles->N; ++p) {
 
-        float xp = particles->xyz[2*p];
-        float yp = particles->xyz[2*p+1];
+        float xp = particles->xyz[2 * p];
+        float yp = particles->xyz[2 * p + 1];
 
-        float up = particles->velocity[2*p];
-        float vp = particles->velocity[2*p+1];
+        float up = particles->velocity[2 * p];
+        float vp = particles->velocity[2 * p + 1];
 
-        float bx0 = particles->bx[2*p];
-        float bx1 = particles->bx[2*p+1];
-        float by0 = particles->by[2*p];
-        float by1 = particles->by[2*p+1];
+        float bx0 = particles->bx[2 * p];
+        float bx1 = particles->bx[2 * p + 1];
+        float by0 = particles->by[2 * p];
+        float by1 = particles->by[2 * p + 1];
 
         // --- X faces ---
-        int i0 = (int)floor(xp/dx - 0.5f);
-        int j0 = (int)floor(yp/dx);
+        int i0 = (int)floor(xp / dx - 0.5f);
+        int j0 = (int)floor(yp / dx);
 
-        for (int j = j0; j <= j0+1; ++j)
-        for (int i = i0; i <= i0+1; ++i) {
+        for (int j = j0; j <= j0 + 1; ++j)
+            for (int i = i0; i <= i0 + 1; ++i) {
 
-            if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
+                if (i < 0 || j < 0 || i >= nx || j >= ny)
+                    continue;
 
-            float xf = (i + 0.5f)*dx;
-            float yf = j*dx;
+                float xf = (i + 0.5f) * dx;
+                float yf = j * dx;
 
-            float w = kernel((xp-xf)/dx)*kernel((yp-yf)/dx);
-            if (w == 0) continue;
+                float w = kernel((xp - xf) / dx) * kernel((yp - yf) / dx);
+                if (w == 0)
+                    continue;
 
-            float ox = xf - xp;
-            float oy = yf - yp;
+                float ox = xf - xp;
+                float oy = yf - yp;
 
-            // Eq. (7): affine term
-            float affine =
-                (bx0 * particles->ix[3*p + 0] +
-                 bx1 * particles->ix[3*p + 1]) * ox +
-                (bx0 * particles->ix[3*p + 1] +
-                 bx1 * particles->ix[3*p + 2]) * oy;
+                // Eq. (7): affine term
+                float affine = (bx0 * particles->ix[3 * p + 0] +
+                                bx1 * particles->ix[3 * p + 1]) *
+                                   ox +
+                               (bx0 * particles->ix[3 * p + 1] +
+                                bx1 * particles->ix[3 * p + 2]) *
+                                   oy;
 
 #pragma omp atomic
-            vx->values[j*nx+i] += mp * w * (up + affine);
+                vx->values[j * nx + i] += mp * w * (up + affine);
 #pragma omp atomic
-            mass_x->values[j*nx+i] += mp * w;
-        }
+                mass_x->values[j * nx + i] += mp * w;
+            }
 
         // --- Y faces ---
-        i0 = (int)floor(xp/dx);
-        j0 = (int)floor(yp/dx - 0.5f);
+        i0 = (int)floor(xp / dx);
+        j0 = (int)floor(yp / dx - 0.5f);
 
-        for (int j = j0; j <= j0+1; ++j)
-        for (int i = i0; i <= i0+1; ++i) {
+        for (int j = j0; j <= j0 + 1; ++j)
+            for (int i = i0; i <= i0 + 1; ++i) {
 
-            if (i < 0 || j < 0 || i >= nx || j >= ny) {
-                continue;
+                if (i < 0 || j < 0 || i >= nx || j >= ny) {
+                    continue;
+                }
+                float xf = i * dx;
+                float yf = (j + 0.5f) * dx;
+
+                float w = kernel((xp - xf) / dx) * kernel((yp - yf) / dx);
+                if (w == 0)
+                    continue;
+
+                float ox = xf - xp;
+                float oy = yf - yp;
+
+                float affine = (by0 * particles->iy[3 * p + 0] +
+                                by1 * particles->iy[3 * p + 1]) *
+                                   ox +
+                               (by0 * particles->iy[3 * p + 1] +
+                                by1 * particles->iy[3 * p + 2]) *
+                                   oy;
+
+#pragma omp atomic
+                vy->values[j * nx + i] += mp * w * (vp + affine);
+#pragma omp atomic
+                mass_y->values[j * nx + i] += mp * w;
             }
-            float xf = i*dx;
-            float yf = (j + 0.5f)*dx;
-
-            float w = kernel((xp-xf)/dx)*kernel((yp-yf)/dx);
-            if (w == 0) continue;
-
-            float ox = xf - xp;
-            float oy = yf - yp;
-
-            float affine =
-                (by0 * particles->iy[3*p + 0] +
-                 by1 * particles->iy[3*p + 1]) * ox +
-                (by0 * particles->iy[3*p + 1] +
-                 by1 * particles->iy[3*p + 2]) * oy;
-
-#pragma omp atomic
-            vy->values[j*nx+i] += mp * w * (vp + affine);
-#pragma omp atomic
-            mass_y->values[j*nx+i] += mp * w;
-        }
     }
 
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < ny; ++j)
         for (int i = 0; i < nx; ++i) {
-            if (mass_x->values[j*nx+i] > 0)
-                vx->values[j*nx+i] /= mass_x->values[j*nx+i];
-            if (mass_y->values[j*nx+i] > 0)
-                vy->values[j*nx+i] /= mass_y->values[j*nx+i];
+            if (mass_x->values[j * nx + i] > 0)
+                vx->values[j * nx + i] /= mass_x->values[j * nx + i];
+            if (mass_y->values[j * nx + i] > 0)
+                vy->values[j * nx + i] /= mass_y->values[j * nx + i];
         }
 
     return EXIT_SUCCESS;
 }
 
-inline int grid_to_particles(
-    particle_field *particles,
-    scalar_field *dom,
-    scalar_field *vx, scalar_field *vy,
-    Metrics &m,
-    std::ofstream &log_file)
-{
+inline int grid_to_particles(particle_field *particles, scalar_field *dom,
+                             scalar_field *vx, scalar_field *vy, Metrics &m,
+                             std::ofstream &log_file) {
     LOG_INFO(log_file, "APIC G->P (paper-faithful)");
 
     int nx = vx->nx, ny = vx->ny;
@@ -143,122 +141,140 @@ inline int grid_to_particles(
 #pragma omp parallel for
     for (int p = 0; p < particles->N; ++p) {
 
-        float xp = particles->xyz[2*p];
-        float yp = particles->xyz[2*p+1];
+        float xp = particles->xyz[2 * p];
+        float yp = particles->xyz[2 * p + 1];
 
         float new_u = 0.0f, new_v = 0.0f;
         float bx0 = 0.0f, bx1 = 0.0f;
         float by0 = 0.0f, by1 = 0.0f;
 
-        float Dx00=0, Dx01=0, Dx11=0;
-        float Dy00=0, Dy01=0, Dy11=0;
+        float Dx00 = 0, Dx01 = 0, Dx11 = 0;
+        float Dy00 = 0, Dy01 = 0, Dy11 = 0;
 
         // --- X faces ---
-        int i0 = (int)floor(xp/dx - 0.5f);
-        int j0 = (int)floor(yp/dx);
+        int i0 = (int)floor(xp / dx - 0.5f);
+        int j0 = (int)floor(yp / dx);
 
-        for (int j = j0; j <= j0+1; ++j)
-        for (int i = i0; i <= i0+1; ++i) {
+        for (int j = j0; j <= j0 + 1; ++j)
+            for (int i = i0; i <= i0 + 1; ++i) {
 
-            if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
+                if (i < 0 || j < 0 || i >= nx || j >= ny)
+                    continue;
 
-            float xf = (i + 0.5f)*dx;
-            float yf = j*dx;
-            float w = kernel((xp-xf)/dx)*kernel((yp-yf)/dx);
-            if (w == 0) continue;
+                float xf = (i + 0.5f) * dx;
+                float yf = j * dx;
+                float w = kernel((xp - xf) / dx) * kernel((yp - yf) / dx);
+                if (w == 0)
+                    continue;
 
-            float ox = xf - xp;
-            float oy = yf - yp;
+                float ox = xf - xp;
+                float oy = yf - yp;
 
-            float vi = vx->values[j*nx+i];
+                float vi = vx->values[j * nx + i];
 
-            new_u += w * vi;
-            bx0 += w * vi * ox;
-            bx1 += w * vi * oy;
+                new_u += w * vi;
+                bx0 += w * vi * ox;
+                bx1 += w * vi * oy;
 
-            Dx00 += w * ox*ox;
-            Dx01 += w * ox*oy;
-            Dx11 += w * oy*oy;
-        }
+                Dx00 += w * ox * ox;
+                Dx01 += w * ox * oy;
+                Dx11 += w * oy * oy;
+            }
 
         // --- Y faces ---
-        i0 = (int)floor(xp/dx);
-        j0 = (int)floor(yp/dx - 0.5f);
+        i0 = (int)floor(xp / dx);
+        j0 = (int)floor(yp / dx - 0.5f);
 
-        for (int j = j0; j <= j0+1; ++j)
-        for (int i = i0; i <= i0+1; ++i) {
+        for (int j = j0; j <= j0 + 1; ++j)
+            for (int i = i0; i <= i0 + 1; ++i) {
 
-            if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
+                if (i < 0 || j < 0 || i >= nx || j >= ny)
+                    continue;
 
-            float xf = i*dx;
-            float yf = (j + 0.5f)*dx;
-            float w = kernel((xp-xf)/dx)*kernel((yp-yf)/dx);
-            if (w == 0) continue;
+                float xf = i * dx;
+                float yf = (j + 0.5f) * dx;
+                float w = kernel((xp - xf) / dx) * kernel((yp - yf) / dx);
+                if (w == 0)
+                    continue;
 
-            float ox = xf - xp;
-            float oy = yf - yp;
+                float ox = xf - xp;
+                float oy = yf - yp;
 
-            float vi = vy->values[j*nx+i];
+                float vi = vy->values[j * nx + i];
 
-            new_v += w * vi;
-            by0 += w * vi * ox;
-            by1 += w * vi * oy;
+                new_v += w * vi;
+                by0 += w * vi * ox;
+                by1 += w * vi * oy;
 
-            Dy00 += w * ox*ox;
-            Dy01 += w * ox*oy;
-            Dy11 += w * oy*oy;
-        }
+                Dy00 += w * ox * ox;
+                Dy01 += w * ox * oy;
+                Dy11 += w * oy * oy;
+            }
 
-        particles->velocity[2*p]   = new_u;
-        particles->velocity[2*p+1] = new_v;
-        particles->bx[2*p]   = bx0;
-        particles->bx[2*p+1] = bx1;
-        particles->by[2*p]   = by0;
-        particles->by[2*p+1] = by1;
+        particles->velocity[2 * p] = new_u;
+        particles->velocity[2 * p + 1] = new_v;
+        particles->bx[2 * p] = bx0;
+        particles->bx[2 * p + 1] = bx1;
+        particles->by[2 * p] = by0;
+        particles->by[2 * p + 1] = by1;
 
         int i = std::max(0, std::min(nx - 1, (int)(xp / dx)));
         int j = std::max(0, std::min(ny - 1, (int)(yp / dx)));
 
         float cell_type = GET(dom, i, j);
         float left_cell = GET(dom, i - 1, j);
-        float right_cell = GET(dom, i + 1, j) ;
+        float right_cell = GET(dom, i + 1, j);
         float bottom_cell = GET(dom, i, j - 1);
         float top_cell = GET(dom, i, j + 1);
 
         // Invert D (Eq. 6)
-        float detDx = Dx00*Dx11 - Dx01*Dx01;
-        float detDy = Dy00*Dy11 - Dy01*Dy01;
+        float detDx = Dx00 * Dx11 - Dx01 * Dx01;
+        float detDy = Dy00 * Dy11 - Dy01 * Dy01;
 
         if (detDx < 1e-15f) {
-            particles->ix[3*p+0] = 0.0f; // arbitrary large value to make affine term negligible
-            particles->ix[3*p+1] = 0.0f;
-            particles->ix[3*p+2] = 0.0f;
+            particles->ix[3 * p + 0] =
+                0.0f; // arbitrary large value to make affine term negligible
+            particles->ix[3 * p + 1] = 0.0f;
+            particles->ix[3 * p + 2] = 0.0f;
             m.singularity_count++;
-        } else if (cell_type == DIRICHLET || left_cell == DIRICHLET || right_cell == DIRICHLET || bottom_cell == DIRICHLET || top_cell == DIRICHLET){ // avoid singularity in non-liquid cells (treat as PIC)
-            particles->ix[3*p] =  4.0f/(dx*dx); // arbitrary large value to make affine term negligible
-            particles->ix[3*p + 1] =  0.0f;
-            particles->ix[3*p + 2] =  4.0f/(dx*dx);
+        } else if (cell_type == DIRICHLET || left_cell == DIRICHLET ||
+                   right_cell == DIRICHLET || bottom_cell == DIRICHLET ||
+                   top_cell == DIRICHLET) { // avoid singularity in non-liquid
+                                            // cells (treat as PIC)
+            particles->ix[3 * p] =
+                4.0f /
+                (dx *
+                 dx); // arbitrary large value to make affine term negligible
+            particles->ix[3 * p + 1] = 0.0f;
+            particles->ix[3 * p + 2] = 4.0f / (dx * dx);
             m.dirichlet++;
         } else {
-            particles->ix[3*p+0] =  Dx11/detDx;
-            particles->ix[3*p+1] = -Dx01/detDx;
-            particles->ix[3*p+2] =  Dx00/detDx;
+            particles->ix[3 * p + 0] = Dx11 / detDx;
+            particles->ix[3 * p + 1] = -Dx01 / detDx;
+            particles->ix[3 * p + 2] = Dx00 / detDx;
         }
 
         if (detDy < 1e-15f) {
-            particles->iy[3*p+0] = 0.0f; // arbitrary large value to make affine term negligible
-            particles->iy[3*p+1] = 0.0f;
-            particles->iy[3*p+2] = 0.0f;
+            particles->iy[3 * p + 0] =
+                0.0f; // arbitrary large value to make affine term negligible
+            particles->iy[3 * p + 1] = 0.0f;
+            particles->iy[3 * p + 2] = 0.0f;
             m.singularity_count++;
-        } else if (cell_type == DIRICHLET || left_cell == DIRICHLET || right_cell == DIRICHLET || bottom_cell == DIRICHLET || top_cell == DIRICHLET){ // avoid singularity in non-liquid cells (treat as PIC)
-            particles->iy[3*p] =  4.0f/(dx*dx); // arbitrary large value to make affine term negligible
-            particles->iy[3*p + 1] =  0.0f;
-            particles->iy[3*p + 2] =  4.0f/(dx*dx);
+        } else if (cell_type == DIRICHLET || left_cell == DIRICHLET ||
+                   right_cell == DIRICHLET || bottom_cell == DIRICHLET ||
+                   top_cell == DIRICHLET) { // avoid singularity in non-liquid
+                                            // cells (treat as PIC)
+            particles->iy[3 * p] =
+                4.0f /
+                (dx *
+                 dx); // arbitrary large value to make affine term negligible
+            particles->iy[3 * p + 1] = 0.0f;
+            particles->iy[3 * p + 2] = 4.0f / (dx * dx);
             m.dirichlet++;
         } else {
-            particles->iy[3*p+0] =  Dy11/detDy;
-            particles->iy[3*p+1] = -Dy01/detDy;
-            particles->iy[3*p+2] =  Dy00/detDy;
+            particles->iy[3 * p + 0] = Dy11 / detDy;
+            particles->iy[3 * p + 1] = -Dy01 / detDy;
+            particles->iy[3 * p + 2] = Dy00 / detDy;
         }
     }
 
@@ -288,8 +304,8 @@ int solver_apic(json &data, std::ofstream &log_file,
     int sampling_rate = data["sampling_rate"];
     float dt = data.value("delta_t", 0.1);
     unsigned int nt = data.value("nt", 10);
-    float rho = data.value("rho", 1000);
     float tol = data.value("tol", 1e-5);
+    float tol_therm = data.value("tol_therm", tol);
     int max_iter = data.value("max_iter", 1e5);
     int particle_density = data.value("particle_density", 8);
     bool refill = data.value("refill", false);
@@ -298,11 +314,24 @@ int solver_apic(json &data, std::ofstream &log_file,
     float init_temp = data.value("init_temperature", 20);
     float T0 = data.value("T0", 20);
     float beta = data.value("beta", 0.01);
-    float c = data.value("c", 4.186);
-    float k = data.value("k", 1.0f);
-    RNG rng(dx, dt);
-    float mass = rho * (dx * dx) / particle_density;
+
+    float c_liq = data.value("c", 4.186);
+    float k_liq = data.value("k", 1.0f);
+    float rho_liq = data.value("rho", 1000.0f);
+    float c_air = data.value("c_air", c_liq);
+    float k_air = data.value("k_air", k_liq);
+    float rho_air = data.value("rho_air", rho_liq);
+    float c_sol = data.value("c_sol", c_liq);
+    float k_sol = data.value("k_sol", k_liq);
+    float rho_sol = data.value("rho_sol", rho_liq);
+
     bool thermal = data.value("thermal", false);
+    float mass = rho_liq * (dx * dx) / particle_density;
+
+    uint32_t seed = data.value("seed", std::random_device{}());
+    LOG_INFO(log_file, "Seed is " << seed);
+
+    RNG rng(dx, dt, seed);
 
     // Computing the creation rate
     float speed_x = 0.0f;
@@ -352,6 +381,8 @@ int solver_apic(json &data, std::ofstream &log_file,
     scalar_field *T_temp = scalar_field_copy(T, log_file);
     scalar_field *kern_sum_T =
         scalar_field_init("kern_sum_T", nx, ny, 0, 0, dx, log_file);
+    scalar_field *r =
+        scalar_field_init("termal_gen", nx, ny, 0, 0, dx, log_file);
 
     scalar_field *mass_x =
         scalar_field_init("mass_x", nx, ny, 0, 0, dx, log_file);
@@ -359,10 +390,13 @@ int solver_apic(json &data, std::ofstream &log_file,
         scalar_field_init("mass_y", nx, ny, 0, 0, dx, log_file);
 
     if (!vx || !vy || !p || !div || !dom || !temp_vx || !temp_vy || !temp_p ||
-        !mass_x || !mass_y) {
+        !mass_x || !mass_y || !r) {
         LOG_ERR(log_file, "An error occured initializing fields.");
         return EXIT_FAILURE;
     }
+
+    if (thermal)
+        initialize_thermal_generation(r, data, log_file);
 
     std::vector<float> speed_condition;
     therm_bc *therm_bcs = (therm_bc *)malloc(sizeof(therm_bc));
@@ -374,7 +408,17 @@ int solver_apic(json &data, std::ofstream &log_file,
     initialize_domain(dom, data, "ic_cell", log_file);
     create_circle(dom, "ic_cylinders", data, log_file);
     initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green", log_file);
-    /* build_thermal_bc(therm_bcs, data, log_file); */
+
+    if (thermal)
+        build_thermal_bc(therm_bcs, data, log_file);
+
+    if (data.contains("special")) {
+        if (data["special"]["type"] == "sine")
+            sine_surface(data, dom, log_file);
+        if (data["special"]["type"] == "taylor green")
+            initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green",
+                                           log_file);
+    }
 
 #pragma omp parallel for collapse(2)
     for (int j = 0; j < (int)ny; j++)
@@ -430,7 +474,9 @@ int solver_apic(json &data, std::ofstream &log_file,
     int singularity = 0;
     int solid_particles = 0;
     int dirichlet = 0;
-    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+    m = compute_metrics(dom, p, vx, vy, div, T, dx, 0, nt, singularity,
+                        solid_particles, dirichlet, m, data["metrics"],
+                        log_file);
     write_header(metrics_file, headers);
     write_metrics(metrics_file, m);
 
@@ -471,26 +517,28 @@ int solver_apic(json &data, std::ofstream &log_file,
             apply_gravity(particles, g, dt, beta, T0);
 
         particles_to_grid(particles, mass, vx, vy, mass_x, mass_y, log_file);
-        particles_temp_to_grid(particles, T, kern_sum_T, log_file);
-        
+        if (thermal)
+            particles_temp_to_grid(particles, T, kern_sum_T, log_file);
+
         t3 = std::chrono::high_resolution_clock::now();
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
         if (data["iteration_algo"] == "Jacobi")
-            jacobi(p, temp_p, div, vx, vy, dom, tol, dt, rho, max_iter,
+            jacobi(p, temp_p, div, vx, vy, dom, tol, dt, rho_liq, max_iter,
                    first_loop, log_file);
         else if (data["iteration_algo"] == "SOR")
-            sor(p, div, vx, vy, dom, tol, dt, rho, max_iter, log_file);
+            sor(p, div, vx, vy, dom, tol, dt, rho_liq, max_iter, log_file);
         else {
             LOG_ERR(log_file, "Iteration algorithm not supported");
             return EXIT_FAILURE;
         }
 
         if (thermal)
-            apply_thermal_eq(T, T_temp, therm_bcs, dt, c, rho, k, tol, max_iter,
-                             log_file);
+            apply_thermal_eq(T, T_temp, r, dom, therm_bcs, dt, c_liq, c_air,
+                             c_sol, rho_liq, rho_air, rho_sol, k_liq, k_air,
+                             k_sol, tol_therm, max_iter, log_file);
 
-        project_velocity(p, vx, vy, dom, dx, dt, rho, log_file,
+        project_velocity(p, vx, vy, dom, dx, dt, rho_liq, log_file,
                          speed_condition);
 
         t4 = std::chrono::high_resolution_clock::now();
@@ -499,13 +547,13 @@ int solver_apic(json &data, std::ofstream &log_file,
         // algorithm
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
-        grid_to_particles(particles, dom, vx, vy, m, log_file);
-
+        if (thermal)
+            grid_to_particles(particles, dom, vx, vy, m, log_file);
 
         t5 = std::chrono::high_resolution_clock::now();
 
         advect(particles, vx, vy, dt, log_file);
-        
+
         // save files
         if (sampling_rate && !(i % sampling_rate)) {
             write_scalar_vtk(vx, i, 0, log_file, work_dir);
@@ -523,7 +571,9 @@ int solver_apic(json &data, std::ofstream &log_file,
         solid_particles = m.particle_in_solid;
         dirichlet = m.dirichlet;
 
-        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+        m = compute_metrics(dom, p, vx, vy, div, T, dx, i, nt, singularity,
+                            solid_particles, dirichlet, m, data["metrics"],
+                            log_file);
         write_metrics(metrics_file, m);
 
         first_loop = false;

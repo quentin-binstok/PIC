@@ -91,6 +91,14 @@ Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, sc
                             float dx, int step, int nt, int singularity, int solid_particles, int dirichlet, Metrics m, const json& metric_data, std::ofstream& log_file);
 std::vector<std::string> build_headers(const json& metric_data);
 
+void write_metrics(std::ofstream &f, const Metrics &m);
+void write_header(std::ofstream &f, const std::vector<std::string> &headers);
+Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx,
+                        scalar_field *vy, scalar_field *div, scalar_field *T,
+                        float dx, int step, int nt, int singularity,
+                        int solid_particles, int dirichlet, Metrics m,
+                        const json &metric_data, std::ofstream &log_file);
+std::vector<std::string> build_headers(const json &metric_data);
 
 void sine_surface(json &data, scalar_field *dom, std::ofstream &log_file);
 

@@ -1,9 +1,11 @@
 #include "thermal.hpp"
+#include "conditions.hpp"
 #include "data.hpp"
 #include "nlohmann/json.hpp"
 #include "particules.hpp"
 #include "utils.hpp"
 #include <cstdlib>
+#include <fstream>
 #include <limits>
 
 using json = nlohmann::json;
@@ -93,26 +95,84 @@ int grid_temp_to_particles(particle_field *particles, scalar_field *T,
 }
 
 /*
+ @brief initializes r to contain the heat generation information
+*/
+int initialize_thermal_generation(scalar_field *r, json &data,
+                                  std::ofstream &log_file) {
+    LOG_INFO(log_file, "Initializing the heat generation term");
+
+    if (!data.contains("heat_gen")) {
+        LOG_WARN(log_file, "No heat generation in the json!");
+        return EXIT_SUCCESS;
+    }
+
+    auto condition = data["heat_gen"];
+    int nx = r->nx, ny = r->ny;
+
+    for (int k = 0; k < (int)condition.size(); k++) {
+        float value = condition[k]["value"];
+
+        if (condition[k].contains("tl")) {
+            int start_x = condition[k]["tl"][0],
+                start_y = condition[k]["tl"][1];
+            int end_x = condition[k]["br"][0], end_y = condition[k]["br"][1];
+            // Checking that we're in the grid
+            if (start_x + 1 < 0 || start_y + 1 < 0 || end_x > nx - 1 ||
+                end_y > ny - 1) {
+                LOG_ERR(log_file, "Condition " << k << " in "
+                                               << "heat generation"
+                                               << " out of bounds");
+                return EXIT_FAILURE;
+            }
+            // Adding the condition to the grid
+            for (int j = start_y; j <= end_y; j++) {
+                for (int i = start_x; i <= end_x; i++) {
+                    SET(r, i, j, value);
+                }
+            }
+        }
+
+        else if (condition[k].contains("center")) {
+            int x = condition[k]["center"][0], y = condition[k]["center"][1];
+            int radius = condition[k]["radius"];
+
+            for (int j = y - radius - 10; j <= y + radius + 10; j++) {
+                for (int i = x - radius - 10; i <= x + radius + 10; i++) {
+                    float condition =
+                        (i - x) * (i - x) + (j - y) * (j - y) - radius * radius;
+                    if (condition < 0 && i >= 0 && i < nx && j >= 0 && j < ny)
+                        SET(r, i, j, value);
+                }
+            }
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
+/*
  * Does a SOR to solve the diffusion equation for temperature
  * Implicit solver
  */
-void apply_thermal_eq(scalar_field *T, scalar_field *T_temp, therm_bc *bcs,
-                      float dt, float c, float rho, float k, float tol,
-                      int max_iter, std::ofstream &log_file) {
+void apply_thermal_eq(scalar_field *T, scalar_field *T_temp, scalar_field *r,
+                      scalar_field *dom, therm_bc *bcs, float dt, float c_liq,
+                      float c_air, float c_sol, float rho_liq, float rho_air,
+                      float rho_sol, float k_liq, float k_air, float k_sol,
+                      float tol, int max_iter, std::ofstream &log_file) {
     LOG_INFO(log_file, "Applying temperature formula");
 
     // Future-proof, will be the thermal generation term
-    float gamma = 0.0f;
-
     int nx = T->nx, ny = T->ny;
     float dx = T->dx;
-    double alpha = (dt * k) / (dx * dx * rho * c);
-    LOG_INFO(log_file, "\talpha = " << alpha);
 
-    if (!alpha) {
-        LOG_ERR(log_file, "alpha is zero! Exiting.");
-        LOG_INFO(log_file, "dt = " << dt << "\ndx = " << dx << "\nk = " << k
-                                   << "\nrho = " << rho << "\nc = " << c);
+    double alpha_liq = (dt * k_liq) / (dx * dx * rho_liq * c_liq);
+    double alpha_air = (dt * k_air) / (dx * dx * rho_air * c_air);
+    double alpha_sol = (dt * k_sol) / (dx * dx * rho_sol * c_sol);
+    LOG_INFO(log_file, "\talpha_liq = " << alpha_liq);
+    LOG_INFO(log_file, "\talpha_air = " << alpha_air);
+    LOG_INFO(log_file, "\talpha_sol = " << alpha_sol);
+
+    if (!alpha_liq || !alpha_air || !alpha_sol) {
+        LOG_ERR(log_file, "one alpha is zero! Exiting.");
         exit(EXIT_FAILURE);
     }
 
@@ -124,7 +184,28 @@ void apply_thermal_eq(scalar_field *T, scalar_field *T_temp, therm_bc *bcs,
     float norm_b = 0;
     for (int j = 0; j < ny; j++) {
         for (int i = 0; i < nx; i++) {
-            norm_b += (GET(T, i, j) + gamma) * (GET(T, i, j) + gamma);
+            CELL_TYPE cell = (CELL_TYPE)GET(dom, i, j);
+
+            // Setting physical parameters for the iteration
+            double rho, c;
+            if (cell == LIQUID || cell == DIRICHLET || i == 0 || i == nx - 1 ||
+                j == 0 || j == ny - 1) {
+                rho = rho_liq;
+                c = c_liq;
+            } else if (cell == AIR) {
+                rho = rho_air;
+                c = c_air;
+            } else if (cell == SOLID) {
+                rho = rho_sol;
+                c = c_sol;
+            } else {
+                LOG_WARN(log_file,
+                         "Unkown domain type at (" << i << ", " << j << ")");
+                continue;
+            }
+
+            norm_b += (GET(T, i, j) + GET(r, i, j) / (rho * c)) *
+                      (GET(T, i, j) + GET(r, i, j) / (rho * c));
         }
     }
     norm_b = std::sqrt(norm_b);
@@ -148,6 +229,31 @@ void apply_thermal_eq(scalar_field *T, scalar_field *T_temp, therm_bc *bcs,
                     if ((i + j) % 2 != color)
                         continue;
 
+                    // Setting physical parameters for the iteration
+                    double alpha, k, rho, c;
+                    CELL_TYPE cell = (CELL_TYPE)GET(dom, i, j);
+                    if (cell == LIQUID || cell == DIRICHLET) {
+                        alpha = alpha_liq;
+                        k = k_liq;
+                        rho = rho_liq;
+                        c = c_liq;
+                    } else if (cell == AIR) {
+                        alpha = alpha_air;
+                        k = k_air;
+                        rho = rho_air;
+                        c = c_air;
+                    } else if (cell == SOLID) {
+                        alpha = alpha_sol;
+                        k = k_sol;
+                        rho = rho_sol;
+                        c = c_sol;
+                    } else {
+                        LOG_WARN(log_file, "Unkown domain type at ("
+                                               << i << ", " << j << ")");
+                        continue;
+                    }
+
+                    // The computation in itself
                     float Tn_ij = GET(T, i, j);
                     float Tn1_ij = GET(T_temp, i, j);
 
@@ -191,7 +297,7 @@ void apply_thermal_eq(scalar_field *T, scalar_field *T_temp, therm_bc *bcs,
                             right_temp = (dx * bcs->val[1]) / k + Tn1_ij;
                     }
 
-                    float new_temp = (Tn_ij + gamma +
+                    float new_temp = (Tn_ij + GET(r, i, j) / (rho * c) +
                                       alpha * (top_temp + bottom_temp +
                                                left_temp + right_temp)) /
                                      (1.0f + 4 * alpha);

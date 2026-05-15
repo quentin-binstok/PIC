@@ -14,6 +14,7 @@
 #include <fstream>
 #include <iostream>
 #include <ostream>
+#include <random>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -147,9 +148,8 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     int sampling_rate = data["sampling_rate"];
     float dt = data.value("delta_t", 0.1);
     unsigned int nt = data.value("nt", 10);
-    float rho = data.value("rho", 1000);
     float tol = data.value("tol", 1e-5);
-    float tol_therm = data.value("tol_therm", 1e-5);
+    float tol_therm = data.value("tol_therm", tol);
     int max_iter = data.value("max_iter", 1e5);
     int particle_density = data.value("particle_density", 8);
     bool refill = data.value("refill", false);
@@ -160,10 +160,22 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     float init_temp = data.value("init_temperature", 20);
     float T0 = data.value("T0", 20);
     float beta = data.value("beta", 0.01);
-    float c = data.value("c", 4.186);
-    float k = data.value("k", 1.0f);
+
     bool thermal = data.value("thermal", false);
-    RNG rng(dx, dt);
+    float c_liq = data.value("c", 4.186);
+    float k_liq = data.value("k", 1.0f);
+    float rho_liq = data.value("rho", 1000.0f);
+    float c_air = data.value("c_air", c_liq);
+    float k_air = data.value("k_air", k_liq);
+    float rho_air = data.value("rho_air", rho_liq);
+    float c_sol = data.value("c_sol", c_liq);
+    float k_sol = data.value("k_sol", k_liq);
+    float rho_sol = data.value("rho_sol", rho_liq);
+
+    uint32_t seed = data.value("seed", std::random_device{}());
+    LOG_INFO(log_file, "Seed is " << seed);
+
+    RNG rng(dx, dt, seed);
 
     // Computing the creation rate
     float speed_x = 0.0f;
@@ -211,6 +223,8 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     scalar_field *T =
         scalar_field_init("Temperature", nx, ny, 0, 0, dx, log_file);
     scalar_field *T_temp = scalar_field_copy(T, log_file);
+    scalar_field *r =
+        scalar_field_init("termal_gen", nx, ny, 0, 0, dx, log_file);
 
     scalar_field *kern_sum_vx =
         scalar_field_init("kern_sum_vx", nx, ny, 0, 0, dx, log_file);
@@ -220,10 +234,13 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
         scalar_field_init("kern_sum_T", nx, ny, 0, 0, dx, log_file);
 
     if (!vx || !vy || !p || !div || !dom || !temp_vx || !temp_vy || !temp_p ||
-        !kern_sum_vx || !kern_sum_vy) {
+        !kern_sum_vx || !kern_sum_vy || !r) {
         LOG_ERR(log_file, "An error occured initializing fields.");
         return EXIT_FAILURE;
     }
+
+    if (thermal)
+        initialize_thermal_generation(r, data, log_file);
 
     std::vector<float> speed_condition;
     therm_bc *therm_bcs = new therm_bc;
@@ -243,7 +260,8 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
         if (data["special"]["type"] == "sine")
             sine_surface(data, dom, log_file);
         if (data["special"]["type"] == "taylor green")
-            initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green", log_file);
+            initialize_taylor_green_vortex(vx, vy, dom, data, "taylor_green",
+                                           log_file);
     }
 
 #pragma omp parallel for collapse(2)
@@ -336,24 +354,25 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
         if (data["iteration_algo"] == "Jacobi")
-            jacobi(p, temp_p, div, vx, vy, dom, tol, dt, rho, max_iter,
+            jacobi(p, temp_p, div, vx, vy, dom, tol, dt, rho_liq, max_iter,
                    first_loop, log_file);
         else if (data["iteration_algo"] == "SOR")
-            sor(p, div, vx, vy, dom, tol, dt, rho, max_iter, log_file);
+            sor(p, div, vx, vy, dom, tol, dt, rho_liq, max_iter, log_file);
         else {
             LOG_ERR(log_file, "Iteration algorithm not supported");
             return EXIT_FAILURE;
         }
 
         if (thermal)
-            apply_thermal_eq(T, T_temp, therm_bcs, dt, c, rho, k, tol_therm,
-                             max_iter, log_file);
+            apply_thermal_eq(T, T_temp, r, dom, therm_bcs, dt, c_liq, c_air,
+                             c_sol, rho_liq, rho_air, rho_sol, k_liq, k_air,
+                             k_sol, tol_therm, max_iter, log_file);
 
         // Needed for FLIP
         std::memcpy(temp_vx->values, vx->values, nx * ny * sizeof(float));
         std::memcpy(temp_vy->values, vy->values, nx * ny * sizeof(float));
 
-        project_velocity(p, vx, vy, dom, dx, dt, rho, log_file,
+        project_velocity(p, vx, vy, dom, dx, dt, rho_liq, log_file,
                          speed_condition);
 
         // This is to be able to save it. It serves no purpose in the
