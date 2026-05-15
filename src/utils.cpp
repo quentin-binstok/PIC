@@ -388,6 +388,22 @@ std::vector<float> computeCoefficients(scalar_field *dom, scalar_field *p, float
     return aero;
 }
 
+float energy(scalar_field *vx, scalar_field *vy) {
+    int nx = vx->nx;
+    int ny = vx->ny;
+    float energy = 0;
+#pragma omp parallel for collapse(2) reduction(+ : energy)
+    for (int j = 0; j < ny; j++) {
+        for (int i = 0; i < nx; i++) {
+            energy += 0.5f * (GET(vx, i, j) * GET(vx, i, j) +
+                              GET(vy, i, j) * GET(vy, i, j));
+        }
+    }
+    return energy;
+}
+
+
+
 
 std::vector<float> slice_vertical(
     scalar_field *vx,
@@ -495,6 +511,8 @@ std::vector<std::string> build_headers(const json &metric_data) {
             headers.push_back("Cd");
             headers.push_back("Cl");
         }
+        else if (h == "energy")
+            headers.push_back("energy");
         else if (h == "depth")
             headers.push_back("depth_" +
                               std::to_string(metric_data[k]["idx"].get<int>()));
@@ -521,6 +539,8 @@ std::vector<std::string> build_headers(const json &metric_data) {
             headers.push_back("singularity_count");
         else if (h == "dirichlet")
             headers.push_back("dirichlet");
+        else if (h == "wave_front")
+            headers.push_back("wave_front");
     }
     return headers;
 }
@@ -568,6 +588,11 @@ Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, sc
             if (metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0) {
                 std::cout << "Cd: " << aero[0] << ", Cl: " << aero[1] << "\n";
             }
+        } else if (h == "energy") {
+            m.values.push_back(energy(vx, vy));
+            if (metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0) {
+                std::cout << "Energy: " << m.values.back() << "\n";
+            }   
         } else if (h == "pressure") {
             m.values.push_back(GET(p, metric_data[k]["idx"][0].get<int>(),
                                    metric_data[k]["idx"][1].get<int>()));
@@ -618,6 +643,15 @@ Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, sc
             m.values.push_back(dirichlet);
             if(metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0 ){
                 std::cout << "Dirichlet cells: " << m.values.back() << "\n";
+            }
+        }
+        else if (h == "wave_front") {
+            int idx = 1;
+            while (idx < dom->nx - 1 && depth(dom, idx, dx) != 0)
+                idx++;
+            m.values.push_back(idx * dx);
+            if (metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0) {
+                std::cout << "Wave front at: " << m.values.back() << "\n";
             }
         }
         else {

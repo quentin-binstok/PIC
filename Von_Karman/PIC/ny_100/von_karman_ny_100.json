@@ -1,0 +1,89 @@
+{
+  "solver": "pic",
+  "iteration_algo": "SOR",
+  "sampling_rate": 10,
+  "log_file": "log.txt",
+  "metrics_file": "metrics_APIC_VK.csv",
+  "dir": "Von_Karman/PIC/ny_100",
+  "flip": 0.0,
+  "grid": [
+    200,
+    100
+  ],
+  "space_steps": 0.03,
+  "nt": 500,
+  "delta_t": 0.015,
+  "tol": 0.01,
+  "max_iter": 100000.0,
+  "rho": 1000.0,
+  "gravity": false,
+  "g": 9.81,
+  "bc": [
+    {
+      "side": 0,
+      "type": 3.0,
+      "speed_x": 5.0
+    },
+    {
+      "side": 1,
+      "type": 2.0
+    },
+    {
+      "side": 2,
+      "type": 1.0
+    },
+    {
+      "side": 3,
+      "type": 1.0
+    }
+  ],
+  "ic_cylinders": [
+    {
+      "center": [
+        33,
+        50
+      ],
+      "radius": 5
+    }
+  ],
+  "ic_cell": [],
+  "particle_density": 25,
+  "refill": true,
+  "metrics": [
+    {
+      "header": "vx",
+      "idx": [
+        150,
+        50
+      ],
+      "print": true
+    },
+    {
+      "header": "vy",
+      "idx": [
+        150,
+        50
+      ],
+      "print": true
+    },
+    {
+      "header": "pressure",
+      "idx": [
+        150,
+        50
+      ],
+      "print": true
+    },
+    {
+      "header": "aero_coefficients",
+      "rho": 1000.0,
+      "U_inf": 5.0,
+      "A_ref": 0.3,
+      "print": true
+    },
+    {
+      "header": "energy",
+      "print": false
+    }
+  ]
+}

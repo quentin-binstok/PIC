@@ -1,0 +1,79 @@
+{
+  "solver": "pic",
+  "iteration_algo": "SOR",
+  "sampling_rate": 63,
+  "log_file": "log.txt",
+  "metrics_file": "metrics_SL_GL.csv",
+  "dir": "Taylor_Green/PIC_GL/nx_250",
+  "flip": 0.0,
+  "grid": [
+    250,
+    250
+  ],
+  "space_steps": 0.012566370614359173,
+  "nt": 3183,
+  "delta_t": 0.006283185307179587,
+  "tol": 0.01,
+  "max_iter": 100000.0,
+  "rho": 1000.0,
+  "gravity": false,
+  "g": 9.81,
+  "bc": [
+    {
+      "side": 0,
+      "type": 1.0
+    },
+    {
+      "side": 1,
+      "type": 1.0
+    },
+    {
+      "side": 2,
+      "type": 1.0
+    },
+    {
+      "side": 3,
+      "type": 1.0
+    }
+  ],
+  "ic_cylinders": [],
+  "ic_cell": [],
+  "taylor_green": [
+    {
+      "Uinf": 1.0,
+      "wavenumber": 1.0
+    }
+  ],
+  "particle_density": 25,
+  "refill": true,
+  "metrics": [
+    {
+      "header": "vx",
+      "idx": [
+        62,
+        62
+      ],
+      "print": true
+    },
+    {
+      "header": "vy",
+      "idx": [
+        62,
+        62
+      ],
+      "print": true
+    },
+    {
+      "header": "pressure",
+      "idx": [
+        62,
+        62
+      ],
+      "print": true
+    },
+    {
+      "header": "energy",
+      "print": true
+    }
+  ]
+}

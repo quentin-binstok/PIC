@@ -6,21 +6,75 @@ Subcommands:
     plot        — plot velocity at one probe point over time
     slice       — plot velocity profile along y at multiple timesteps
 """
- 
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import matplotlib.colors as mcolors
+from scipy.optimize import curve_fit
 from pandas import read_csv
 import json
 import argparse
 import pathlib
 import copy
 import subprocess
+import os
  
-ROOT_SIM = pathlib.Path("von_karman_sim/SL")
-ROOT_OUT = pathlib.Path("Von_Karman/SL")
-NY_LIST = [30, 40, 50, 80, 100, 150]
+ 
+
+NY_LIST = [100, 125, 150, 200]
+NT_LIST = [250, 500, 1000, 2000, 4000]
+ROOT_SIM = pathlib.Path("von_karman_sim/APIC")
+ROOT_OUT = pathlib.Path("Von_Karman/APIC")
+SOLVER = "APIC"
+
+# ---------------------------------------------------------------------------
+# Global plot style
+# ---------------------------------------------------------------------------
+ 
+TICK_SIZE   = 22   # axis tick label size
+LABEL_SIZE  = 28   # x/y axis label size
+LEGEND_SIZE = 18   # legend text size
+TITLE_SIZE  = 20   # figure title size
+LINE_WIDTH  = 2.8  # default line width for simulation curves
+FIT_WIDTH   = 3.2  # line width for fit / reference curves
+ 
+def apply_style(ax):
+    """Apply consistent tick and grid style to an Axes."""
+    ax.tick_params(axis="both", which="major", labelsize=TICK_SIZE, width=1.4, length=6)
+    ax.tick_params(axis="both", which="minor", width=1.0, length=3)
+    ax.grid(True, which="both", alpha=0.25, linewidth=0.8)
+    for spine in ax.spines.values():
+        spine.set_linewidth(1.2)
+ 
+ 
+# ---------------------------------------------------------------------------
+# Qualitative color palette (standard, distinguishable colors)
+# ---------------------------------------------------------------------------
+ 
+# A hand-picked palette that reads well on white and in print:
+# blue, orange, green, red, purple  (one per resolution)
+_PALETTE = [
+    "#1f77b4",   # muted blue
+    "#ff7f0e",   # safety orange
+    "#2ca02c",   # cooked asparagus green
+    "#d62728",   # brick red
+    "#9467bd",   # muted purple
+]
+ 
+def _resolution_styles(nx_list):
+    """
+    Return a dict {nx: {"color": ..., "ls": ..., "marker": ...}}
+    Each resolution gets a distinct color from the qualitative palette.
+    """
+    nx_sorted = sorted(nx_list)
+    styles = {}
+    for i, nx in enumerate(nx_sorted):
+        styles[nx] = {
+            "color":  _PALETTE[i % len(_PALETTE)],
+            "alpha":  1.0,
+        }
+    return styles
+ 
  
  
 # ---------------------------------------------------------------------------
@@ -83,46 +137,39 @@ def load_run(json_path: pathlib.Path, csv_path: pathlib.Path,
 # ---------------------------------------------------------------------------
  
 def build_folder(args):
-    temp_folder = pathlib.Path("von_karman_sim/SL")
-    temp_folder.mkdir(parents=True, exist_ok=True)
-    pathlib.Path("Von_Karman/SL").mkdir(parents=True, exist_ok=True)
+    temp = ROOT_SIM
+    temp.mkdir(exist_ok=True)
+    ROOT_OUT.mkdir(exist_ok=True)
  
-    with open(args.input, "r") as f:
-        base_data = json.load(f)
+    with open(args.input) as f:
+        base = json.load(f)
+    
+    base_T = 7.5
+    base_L = 3.0
+    CFL = 0.5
  
-    with open(temp_folder / "von_karman_base.json", "w") as f:
-        json.dump(base_data, f, indent=2)
- 
-    base_dx  = base_data["space_steps"]
-    base_ny  = base_data["grid"][1]
-    base_nt  = base_data["nt"]
-    base_dt  = base_data["delta_t"]
-    base_cfl = 4*base_dt / base_dx
-    base_T   = base_nt * base_dt
- 
-    # timesteps at which the slice is saved: spread over the simulation
-    # use 4 snapshots: 0%, 33%, 66%, 100% of total steps
     def slice_timesteps(nt):
         return [1, nt // 3, 2 * nt // 3, nt - 2]
+
  
     for ny in NY_LIST:
-        ratio = ny / base_ny
-        dx    = base_dx / ratio
-        dt    = base_cfl * dx
-        nt    = int(round(base_T / dt))
-        nx   = 2 * ny
+        nx    = 2*ny  # keep aspect ratio 4:1
+        dx    = base_L / ny
+        dt    = CFL * dx  # CFL condition for stability
+        nt    = int(base_T / dt)
  
-        run_dir = pathlib.Path("Von_Karman/SL") / f"ny_{ny}"
- 
-        work = copy.deepcopy(base_data)
+        work = copy.deepcopy(base)
+        work["solver"]      = "apic"
         work["grid"]        = [nx, ny]
         work["space_steps"] = dx
         work["delta_t"]     = dt
         work["nt"]          = nt
-        work["dir"]         = str(run_dir)
+        work["dir"]         = str(ROOT_OUT / f"ny_{ny}")
+        work["sampling_rate"] = nt//50  # ~100 samples per run
+        work["flip"]    = 1.0
 
-        work["ic_cylinders"][0]["center"] = [nx/5, ny/2]
-        work["ic_cylinders"][0]["radius"] = ny/20
+        work["ic_cylinders"][0]["center"] = [(int)(nx/6), (int)(ny/2)]
+        work["ic_cylinders"][0]["radius"] = (int)(ny/20)
 
 
         work["metrics"][0]["idx"] = [3*nx // 4, ny // 2]
@@ -132,7 +179,7 @@ def build_folder(args):
 
 
  
-        work["slice_x_csv"] = {
+        """ work["slice_x_csv"] = {
             "enabled": True,
             "field": "vx",
             "type": "vertical",
@@ -152,24 +199,18 @@ def build_folder(args):
             "j_end": ny - 1,
             "timesteps": slice_timesteps(nt),
             "file": "vy_slice.csv",
-        }
+        } """
  
-        with open(temp_folder / f"von_karman_ny_{ny}.json", "w") as f:
+        with open(temp / f"von_karman_ny_{ny}.json", "w") as f:
             json.dump(work, f, indent=2)
  
-    return temp_folder
+    return temp
  
  
 def launch_sims(args, folder):
-    json_files = sorted(    
-        folder.glob("von_karman_ny_*.json"),
-        key=lambda p: int(p.stem.split("_")[-1]),
-    )
-    for json_file in json_files:
-        print(f"\nRunning {json_file.name} ...")
-        subprocess.run([str(args.binary), str(json_file)], check=True)
-
-import numpy as np
+    for json_file in sorted(folder.glob("von_karman_ny_*.json")):
+        sbinary = os.path.abspath(args.binary)
+        subprocess.run([sbinary, str(json_file)], check=True)
 
 def dominant_frequency(signal, dt):
     """
@@ -187,517 +228,387 @@ def dominant_frequency(signal, dt):
 
     idx = np.argmax(fft_vals)
     return freqs[idx]
-
-
-def _resolution_styles(
-    nx_list,
-    cmap_name="Blues",
-    alpha=1.0,
-    t_min=0.2,   # skip near-white colors
-    t_max=0.9,
-):
-    """
-    Color varies with resolution, avoiding invisible light colors.
-    Alpha is fixed.
-    """
-
-    nx_sorted = sorted(nx_list)
-    n = len(nx_sorted)
-
-    cmap = plt.get_cmap(cmap_name)
-
-    styles = {}
-    for i, nx in enumerate(nx_sorted):
-        t = i / (n - 1) if n > 1 else 0.5
-        t = t_min + t * (t_max - t_min)
-        styles[nx] = {
-            "color": cmap(t),
-            "alpha": alpha,
-        }
-
-    return styles
- 
  
 # ---------------------------------------------------------------------------
 # plot subcommand — velocity at probe point over time
 # ---------------------------------------------------------------------------
  
-def cmd_plot(args):
-    r = load_run(args.input, pathlib.Path(args.csv), args.ix, args.iy)
- 
-    print(f"\n{'='*57}")
-    print(f"  Probe      : grid ({r['probe_ix']}, {r['probe_iy']})  →  "
-          f"(x={r['x_probe']:.4f}, y={r['y_probe']:.4f})")
-    print(f"  Analytical : u0 = {r['ana_u0']:+.6f},  v0 = {r['ana_v0']:+.6f}")
-    print(f"  Sim u      : min={r['sim_u'].min():.6f}  max={r['sim_u'].max():.6f}")
-    print(f"  Sim v      : min={r['sim_v'].min():.6f}  max={r['sim_v'].max():.6f}")
-    print(f"{'='*57}\n")
- 
-    times = r["times"]
- 
-    fig, axes = plt.subplots(2, 1, figsize=(11, 7), sharex=True)
-    fig.suptitle(
-        f"Uniform flow — velocity at probe\n"
-        f"Probe ({r['probe_ix']}, {r['probe_iy']})  "
-        f"($x$={r['x_probe']:.3f}, $y$={r['y_probe']:.3f})",
-        fontsize=12,
-    )
- 
-    for ax, sim, ana0, lbl, color in [
-        (axes[0], r["sim_u"], r["ana_u0"], "u", "steelblue"),
-        (axes[1], r["sim_v"], r["ana_v0"], "v", "tomato"),
-    ]:
-        ax.axhline(ana0, color="gray", lw=1.2, ls=":", label="Analytical")
-        ax.plot(times, sim, color=color, lw=1.5, label="Simulation")
-        ax.set_ylabel(f"${lbl}$ velocity")
-        ax.legend(fontsize=9)
-        ax.grid(True, alpha=0.3)
- 
-    axes[1].set_xlabel("Time (s)", fontsize=20)
-    plt.tight_layout()
-    plt.show()
- 
- 
-# ---------------------------------------------------------------------------
-# slice subcommand — velocity profile along y at multiple timesteps
-# ---------------------------------------------------------------------------
- 
-def plot_slice(csv_path: pathlib.Path, json_path: pathlib.Path, every: int = 1):
+def _load_vk_run(ny: int, col: str):
     """
-    Plot vertical velocity slices:
-        x-axis: velocity
-        y-axis: physical position
-        one curve per stored timestep
+    Load a single column from the von Kármán metrics CSV for resolution ny.
+    Returns (times, signal, dt) or None if files are missing.
     """
+    json_path = ROOT_SIM / f"von_karman_ny_{ny}.json"
+    csv_path  = ROOT_OUT / f"ny_{ny}" / f"metrics_SL_{ny}.csv"
+ 
+    if not json_path.exists() or not csv_path.exists():
+        print(f"ny={ny}: missing files, skipping.")
+        return None
+ 
     with open(json_path) as f:
         data = json.load(f)
  
-    dx        = data["space_steps"]
-    dt        = data["delta_t"]
-    slice_cfg = data["slice_csv"]
-    timesteps = slice_cfg["timesteps"]   # exact step numbers for each row
- 
-    bc_inflow = next(bc for bc in data["bc"] if "speed_x" in bc)
-    U0        = bc_inflow["speed_x"]
+    dt = data["delta_t"]
+    nt = data["nt"]
  
     df = read_csv(csv_path)
+    if col not in df.columns:
+        print(f"ny={ny}: column '{col}' not found, skipping.")
+        return None
  
-    # columns: vx_<i>_<j> — extract j indices
-    slice_cols = [c for c in df.columns if c.startswith("vx_")]
-    if not slice_cols:
-        raise ValueError("No slice columns (vx_*) found in CSV.")
+    signal = df[col].values[:nt].astype(float)
+    times  = np.linspace(0.0, nt * dt, nt, dtype=float)
  
-    j_indices  = [int(c.split("_")[-1]) for c in slice_cols]
-    y_coords   = np.array(j_indices) * dx
+    return times, signal, dt, nt
  
-    order      = np.argsort(y_coords)
-    y_coords   = y_coords[order]
-    slice_cols = [slice_cols[i] for i in order]
  
-    fig, ax = plt.subplots(figsize=(6, 8))
+def _transient_cut(nt: int, fraction: float = 1/3) -> int:
+    """Index at which the transient is considered over."""
+    return int(fraction * nt)
  
-    for idx, row in df.iterrows():
-        if idx % every != 0:
-            continue
-        step       = timesteps[idx]        # actual step number from JSON
-        time       = step * dt
-        vx_profile = row[slice_cols].values.astype(float)
-        ax.plot(vx_profile, y_coords, lw=1.5,
-                label=f"t = {time:.3f}s  (step {step})")
  
-    # analytical reference: vertical line at U0
-    ax.axvline(U0, color="black", lw=1.2, ls=":",
-               label=f"Analytical $U_0$ = {U0}")
+# ---------------------------------------------------------------------------
+# cmd_plot_vx
+# ---------------------------------------------------------------------------
  
-    ax.set_xlabel(r"$v_x$", fontsize=20)
-    ax.set_ylabel(r"$y$", fontsize=20)
-    ax.set_title(
-        f"Uniform flow — $v_x$ slice at $i$ = {slice_cfg['i']}  "
-        f"($x$ = {slice_cfg['i'] * dx:.3f})"
-    )
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=12)
-    plt.tight_layout()
-    plt.show()
-
-def cmd_compare(args):
+def cmd_plot_vx(args):
     """
-    Compare vx and vy vertical slices across all resolutions (uniform flow).
+    Von Kármán — plot vx at the probe point over time for all resolutions,
+    and extract the dominant frequency of the oscillation.
     """
-
-    styles = _resolution_styles(NY_LIST, cmap_name="Blues")
-
-    fig_x, ax_x = plt.subplots(figsize=(6, 7))
-    fig_y, ax_y = plt.subplots(figsize=(6, 7))
-
-    y_ref = None
-
+    styles = _resolution_styles(NY_LIST)
+ 
+    fig, ax = plt.subplots(figsize=(9, 6))
+ 
+    ny_vals  = []
+    freq_vals = []
+ 
     for ny in NY_LIST:
         json_path = ROOT_SIM / f"von_karman_ny_{ny}.json"
-        run_dir   = ROOT_OUT / f"ny_{ny}"
-
-        vx_csv = run_dir / "vx_slice.csv"
-        vy_csv = run_dir / "vy_slice.csv"
-
-        if not json_path.exists() or not vx_csv.exists() or not vy_csv.exists():
-            print(f"ny={ny}: missing files, skipping.")
-            continue
-
-        with open(json_path) as f:
-            data = json.load(f)
-
-        bc_inflow = next(bc for bc in data["bc"] if "speed_x" in bc)
-        U0 = bc_inflow["speed_x"]
-        V0 = bc_inflow.get("speed_y", 0.0)
-
-        dx        = data["space_steps"]
-        slice_x  = data["slice_x_csv"]
-        slice_y  = data["slice_y_csv"]
-
-        sid = 1  # same slice index for all resolutions
-
-        # ---- vx slice ------------------------------------------------------
-        df_x = read_csv(vx_csv)
-        vx_cols = sorted(
-            [c for c in df_x.columns if c.startswith("vx_")],
-            key=lambda c: int(c.split("_")[-1]),
-        )
-
-        j_idx = np.array([int(c.split("_")[-1]) for c in vx_cols])
-        y     = (j_idx + 0.5) * dx
-
-        vx_num = df_x.iloc[sid][vx_cols].values.astype(float)
-
-        ax_x.plot(
-            vx_num, y,
-            lw=1.5,
-            color=styles[ny]["color"],
-            alpha=styles[ny]["alpha"],
-            label=f"ny={ny}",
-        )
-
-        # ---- vy slice ------------------------------------------------------
-        df_y = read_csv(vy_csv)
-        vy_cols = sorted(
-            [c for c in df_y.columns if c.startswith("vy_")],
-            key=lambda c: int(c.split("_")[-1]),
-        )
-
-        vy_num = df_y.iloc[sid][vy_cols].values.astype(float)
-
-        ax_y.plot(
-            vy_num, y,
-            lw=1.5,
-            color=styles[ny]["color"],
-            alpha=styles[ny]["alpha"],
-            label=f"ny={ny}",
-        )
-
-        if y_ref is None:
-            y_ref = y
-
-    # ---- analytical references --------------------------------------------
-    ax_x.axvline(1.0, color="black", lw=2.5, ls="--", zorder = 10, label=f"$U_0 = 1.0$")
-    ax_y.axvline(0.0, color="black", lw=2.5, ls="--", zorder = 10, label=f"$V_0 = 0.0$")
-
-    for ax, comp in [(ax_x, "x"), (ax_y, "y")]:
-        ax.set_xlabel(rf"$v_{comp}$ (m/s)", fontsize=24)
-        ax.set_ylabel(r"$y$ (m)", fontsize=24)
-        ax.tick_params(labelsize=14)
-        ax.legend(fontsize=12)
-        ax.grid(True, alpha=0.3)
-
-    """ fig_x.suptitle("Uniform flow — $v_x$ slice convergence", fontsize=14)
-    fig_y.suptitle("Uniform flow — $v_y$ slice convergence", fontsize=14) """
-
-    fig_x.tight_layout()
-    fig_y.tight_layout()
-    plt.show()
-
-def cmd_convergence(args):
-    """
-    Plot Cl and vy at probe point over time for all resolutions
-    and show dominant frequency convergence with respect to ny.
-    """
-
-    styles = _resolution_styles(NY_LIST, cmap_name="Blues")
-
-    fig_x, ax_x = plt.subplots(figsize=(9, 7))
-    fig_y, ax_y = plt.subplots(figsize=(9, 7))
-
-    # ---- storage for frequency convergence -----------------------------
-    ny_vals = []
-    freq_cl_vals = []
-    freq_vy_vals = []
-
-    V0_ref = None
-
-    for ny in NY_LIST:
-        json_path = ROOT_SIM / f"von_karman_ny_{ny}.json"
-        csv_path  = ROOT_OUT / f"ny_{ny}" / f"metrics_SL_{ny}.csv"
-
+        csv_path  = ROOT_OUT / f"ny_{ny}" / f"metrics_APIC_VK.csv"
+ 
         if not json_path.exists() or not csv_path.exists():
             print(f"ny={ny}: missing files, skipping.")
             continue
-
-        # ---- load simulation metadata -----------------------------------
+ 
         with open(json_path) as f:
             data = json.load(f)
-
-        bc_inflow = next(bc for bc in data["bc"] if "speed_x" in bc)
-        V0 = bc_inflow.get("speed_y", 0.0)
-
-        if V0_ref is None:
-            V0_ref = V0
-
+ 
         dt = data["delta_t"]
         nt = data["nt"]
         ix, iy = data["metrics"][0]["idx"]
-
-        # remove transient
-        cl_start = int(2 * nt / 3)
-
-        times = np.linspace(cl_start * dt, nt * dt, nt - cl_start)
-
-        # ---- load time series -------------------------------------------
-        df = read_csv(csv_path)
-
-        cl = df["Cl"].values[cl_start:nt]
-        v  = df[f"vy_{ix}_{iy}"].values[cl_start:nt]
-
-        # ---- dominant frequency extraction ------------------------------
-        f_cl = dominant_frequency(cl, dt)
-        f_vy = dominant_frequency(v, dt)
-
+ 
+        col = f"vx_{ix}_{iy}"
+        df  = read_csv(csv_path)
+        if col not in df.columns:
+            print(f"ny={ny}: column '{col}' not found, skipping.")
+            continue
+ 
+        signal = df[col].values[:nt].astype(float)
+        cut    = _transient_cut(nt)
+        times  = np.linspace(cut * dt, nt * dt, nt - cut, dtype=float)
+        signal = signal[cut:]
+ 
+        freq = dominant_frequency(signal, dt)
         ny_vals.append(ny)
-        freq_cl_vals.append(f_cl)
-        freq_vy_vals.append(f_vy)
-
-        print(f"ny={ny:4d} | f_Cl = {f_cl:.4f} Hz | f_vy = {f_vy:.4f} Hz")
-
-        # ---- time signals -----------------------------------------------
-        ax_x.plot(
-            times, cl,
-            lw=1,
-            color=styles[ny]["color"],
-            alpha=styles[ny]["alpha"],
-            label=f"ny={ny}",
-        )
-
-        ax_y.plot(
-            times, v,
-            lw=1,
-            color=styles[ny]["color"],
-            alpha=styles[ny]["alpha"],
-            label=f"ny={ny}",
-        )
-
-    # ---- reference -----------------------------------------------------
-    ax_y.axhline(
-        V0_ref, color="black", lw=2.5, ls="--",
-        label=r"$V_0$"
-    )
-
-    # ---- formatting: Cl time history ----------------------------------
-    ax_x.set_xlabel("Time (s)", fontsize=24)
-    ax_x.set_ylabel("Pressure base coefficient", fontsize=24)
-    ax_x.tick_params(labelsize=14)
-    ax_x.legend(fontsize=12)
-    ax_x.grid(True, alpha=0.3)
-
-    # ---- formatting: vy time history ----------------------------------
-    ax_y.set_xlabel("Time (s)", fontsize=24)
-    ax_y.set_ylabel(r"$v_y$ (m/s)", fontsize=24)
-    ax_y.tick_params(labelsize=14)
-    ax_y.legend(fontsize=12)
-    ax_y.grid(True, alpha=0.3)
-
-    fig_x.tight_layout()
-    fig_y.tight_layout()
-
-    # ==== FREQUENCY CONVERGENCE PLOT ===================================
-    fig_f, ax_f = plt.subplots(figsize=(9, 7))
-
-    ax_f.plot(
-        ny_vals, freq_cl_vals,
-        "o-", lw=2, ms=7,
-        label=r"$f_{Cl}$"
-    )
-
-    ax_f.plot(
-        ny_vals, freq_vy_vals,
-        "s--", lw=2, ms=7,
-        label=r"$f_{v_y}$"
-    )
-
-    ax_f.set_xlabel(r"Resolution $n_y$", fontsize=24)
-    ax_f.set_ylabel("Dominant frequency (Hz)", fontsize=24)
-    ax_f.tick_params(labelsize=14)
-    ax_f.grid(True, alpha=0.3)
-    ax_f.legend(fontsize=14)
-
-    fig_f.tight_layout()
-
+        freq_vals.append(freq)
+        print(f"ny={ny:4d} | f(vx) = {freq:.4f} Hz")
+ 
+        color = styles[ny]["color"]
+        ax.plot(times, signal, lw=LINE_WIDTH, color=color,
+                alpha=styles[ny].get("alpha", 1.0), label=f"ny={ny}")
+ 
+    ax.set_xlabel("Time (s)", fontsize=LABEL_SIZE)
+    ax.set_ylabel(r"$v_x$ (m/s)", fontsize=LABEL_SIZE)
+    ax.legend(fontsize=LEGEND_SIZE)
+    apply_style(ax)
+    fig.tight_layout()
+ 
+    ROOT_OUT.mkdir(parents=True, exist_ok=True)
+    fig.savefig(ROOT_OUT / f"vk_vx_{SOLVER}.pdf", format="pdf")
+    print(f"Saved: {ROOT_OUT / f'vk_vx_{SOLVER}.pdf'}")
+ 
+    _plot_frequency_convergence(ny_vals, freq_vals, ylabel=r"$f_{v_x}$ (Hz)",
+                                 out_name=f"vk_freq_vx_{SOLVER}.pdf")
     plt.show()
-
-def cmd_error(args):
+ 
+ 
+# ---------------------------------------------------------------------------
+# cmd_plot_vy
+# ---------------------------------------------------------------------------
+ 
+def cmd_plot_vy(args):
     """
-    Plot mean absolute error |vx - U0| averaged over the full slice
-    and all stored timesteps, vs dx — one point per resolution.
+    Von Kármán — plot vy at the probe point over time for all resolutions,
+    and extract the dominant frequency of the oscillation.
     """
-    with open(args.input) as f:
-        base_data = json.load(f)
-    bc_inflow = next(bc for bc in base_data["bc"] if "speed_x" in bc)
-    U0 = bc_inflow["speed_x"]
-
-    dx_arr  = []
-    err_arr = []
-
+    styles = _resolution_styles(NY_LIST)
+ 
+    fig, ax = plt.subplots(figsize=(9, 6))
+ 
+    ny_vals   = []
+    freq_vals = []
+ 
     for ny in NY_LIST:
         json_path = ROOT_SIM / f"von_karman_ny_{ny}.json"
-        csv_path  = ROOT_OUT / f"ny_{ny}" / "vx_slice.csv"
-
+        csv_path  = ROOT_OUT / f"ny_{ny}" / f"metrics_APIC_VK.csv"
+ 
         if not json_path.exists() or not csv_path.exists():
             print(f"ny={ny}: missing files, skipping.")
             continue
-
+ 
         with open(json_path) as f:
             data = json.load(f)
-
-        dx = data["space_steps"]
-        df = read_csv(csv_path)
-
-        slice_cols = sorted(
-            [c for c in df.columns if c.startswith("vx_")],
-            key=lambda c: int(c.split("_")[-1]),
-        )
-        if not slice_cols:
-            print(f"ny={ny}: no slice columns, skipping.")
+ 
+        dt = data["delta_t"]
+        nt = data["nt"]
+        ix, iy = data["metrics"][0]["idx"]
+ 
+        col = f"vy_{ix}_{iy}"
+        df  = read_csv(csv_path)
+        if col not in df.columns:
+            print(f"ny={ny}: column '{col}' not found, skipping.")
             continue
-
-        # mean |vx - U0| over all rows and all slice points
-        vx_all = df[slice_cols].values.astype(float)
-        error  = np.mean(np.abs(vx_all - U0))
-
-        dx_arr.append(dx)
-        err_arr.append(error)
-        print(f"ny={ny:>4}  dx={dx:.5f}  mean_error={error:.4e}")
-
-    if len(dx_arr) < 2:
-        print("Not enough runs to plot.")
-        return
-
-    dx_arr  = np.array(dx_arr)
-    err_arr = np.array(err_arr)
-
-    # log-log fit to get convergence order
-    coeffs = np.polyfit(np.log(dx_arr), np.log(err_arr), 1)
-    order  = coeffs[0]
-    c_fit  = np.exp(coeffs[1])
-    print(f"\n  Convergence order : p = {order:.3f}  (error ~ dx^p)")
-
-    dx_fine  = np.logspace(np.log10(dx_arr.min()), np.log10(dx_arr.max()), 100)
-    err_fine = c_fit * dx_fine ** order
-
-    # reference slopes
-    mid_err = np.median(err_arr)
-    mid_dx  = np.median(dx_arr)
-    ref1    = mid_err * (dx_fine / mid_dx) ** 1
-    ref2    = mid_err * (dx_fine / mid_dx) ** 2
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-    ax.loglog(dx_arr, err_arr, "ko-", lw=1.5, markersize=6,
-              label=r"Mean $|v_x - U_0|$")
-    ax.loglog(dx_fine, err_fine, "-", color="black", lw=1, alpha=0.4,
-              label=rf"fit: $C \cdot \Delta x^{{{order:.2f}}}$")
-    ax.loglog(dx_fine, ref1, ":", color="gray", lw=1.2, label="slope = 1")
-    ax.loglog(dx_fine, ref2, "--", color="gray", lw=1.2, label="slope = 2")
-
-    ax.set_xlabel(r"Grid spacing $\Delta x$", fontsize=12)
-    ax.set_ylabel(r"Mean $|v_x - U_0|$", fontsize=12)
-    ax.set_title("Uniform flow — error convergence", fontsize=13)
-    ax.legend(fontsize=9)
-    ax.grid(True, which="both", alpha=0.3)
-    plt.tight_layout()
+ 
+        signal = df[col].values[:nt].astype(float)
+        cut    = _transient_cut(nt)
+        times  = np.linspace(cut * dt, nt * dt, nt - cut, dtype=float)
+        signal = signal[cut:]
+ 
+        freq = dominant_frequency(signal, dt)
+        ny_vals.append(ny)
+        freq_vals.append(freq)
+        print(f"ny={ny:4d} | f(vy) = {freq:.4f} Hz")
+ 
+        color = styles[ny]["color"]
+        ax.plot(times, signal, lw=LINE_WIDTH, color=color,
+                alpha=styles[ny].get("alpha", 1.0), label=f"ny={ny}")
+ 
+    ax.set_xlabel("Time (s)", fontsize=LABEL_SIZE)
+    ax.set_ylabel(r"$v_y$ (m/s)", fontsize=LABEL_SIZE)
+    ax.legend(fontsize=LEGEND_SIZE)
+    apply_style(ax)
+    fig.tight_layout()
+ 
+    ROOT_OUT.mkdir(parents=True, exist_ok=True)
+    fig.savefig(ROOT_OUT / f"vk_vy_{SOLVER}.pdf", format="pdf")
+    print(f"Saved: {ROOT_OUT / f'vk_vy_{SOLVER}.pdf'}")
+ 
+    _plot_frequency_convergence(ny_vals, freq_vals, ylabel=r"$f_{v_y}$ (Hz)",
+                                 out_name=f"vk_freq_vy_{SOLVER}.pdf")
     plt.show()
  
  
+# ---------------------------------------------------------------------------
+# cmd_plot_p
+# ---------------------------------------------------------------------------
+ 
+def cmd_plot_p(args):
+    """
+    Von Kármán — plot pressure p at the probe point over time for all
+    resolutions, and extract the dominant frequency of the oscillation.
+    """
+    styles = _resolution_styles(NY_LIST)
+ 
+    fig, ax = plt.subplots(figsize=(9, 6))
+ 
+    ny_vals   = []
+    freq_vals = []
+ 
+    for ny in NY_LIST:
+        json_path = ROOT_SIM / f"von_karman_ny_{ny}.json"
+        csv_path  = ROOT_OUT / f"ny_{ny}" / f"metrics_APIC_VK.csv"
+ 
+        if not json_path.exists() or not csv_path.exists():
+            print(f"ny={ny}: missing files, skipping.")
+            continue
+ 
+        with open(json_path) as f:
+            data = json.load(f)
+ 
+        dt = data["delta_t"]
+        nt = data["nt"]
+        ix, iy = data["metrics"][0]["idx"]
+ 
+        col = f"pressure_{ix}_{iy}"
+        df  = read_csv(csv_path)
+        if col not in df.columns:
+            print(f"ny={ny}: column '{col}' not found, skipping.")
+            continue
+ 
+        signal = df[col].values[:nt].astype(float)
+        cut    = _transient_cut(nt)
+        times  = np.linspace(cut * dt, nt * dt, nt - cut, dtype=float)
+        signal = signal[cut:]
+ 
+        freq = dominant_frequency(signal, dt)
+        ny_vals.append(ny)
+        freq_vals.append(freq)
+        print(f"ny={ny:4d} | f(p)  = {freq:.4f} Hz")
+ 
+        color = styles[ny]["color"]
+        ax.plot(times, signal, lw=LINE_WIDTH, color=color,
+                alpha=styles[ny].get("alpha", 1.0), label=f"ny={ny}")
+ 
+    ax.set_xlabel("Time (s)", fontsize=LABEL_SIZE)
+    ax.set_ylabel(r"$p$ (Pa)", fontsize=LABEL_SIZE)
+    ax.legend(fontsize=LEGEND_SIZE)
+    apply_style(ax)
+    fig.tight_layout()
+ 
+    ROOT_OUT.mkdir(parents=True, exist_ok=True)
+    fig.savefig(ROOT_OUT / f"vk_p_{SOLVER}.pdf", format="pdf")
+    print(f"Saved: {ROOT_OUT / f'vk_p_{SOLVER}.pdf'}")
+ 
+    _plot_frequency_convergence(ny_vals, freq_vals, ylabel=r"$f_p$ (Hz)",
+                                 out_name=f"vk_freq_p_{SOLVER}.pdf")
+    plt.show()
+ 
+ 
+# ---------------------------------------------------------------------------
+# cmd_plot_cl
+# ---------------------------------------------------------------------------
+ 
+def cmd_plot_cl(args):
+    """
+    Von Kármán — plot the lift coefficient Cl over time for all resolutions,
+    and extract the dominant (shedding) frequency.
+    """
+    styles = _resolution_styles(NY_LIST)
+ 
+    fig_1, ax = plt.subplots(figsize=(9, 6))
+    fig_2, ax2 = plt.subplots(figsize=(9, 6))
+ 
+    ny_vals   = []
+    freq_vals = []
+ 
+    for ny in NY_LIST:
+        json_path = ROOT_SIM / f"von_karman_ny_{ny}.json"
+        csv_path  = ROOT_OUT / f"ny_{ny}" / f"metrics_APIC_VK.csv"
+ 
+        if not json_path.exists() or not csv_path.exists():
+            print(f"ny={ny}: missing files, skipping.")
+            continue
+ 
+        with open(json_path) as f:
+            data = json.load(f)
+ 
+        dt = data["delta_t"]
+        nt = data["nt"]
+ 
+        df = read_csv(csv_path)
+        if "Cl" not in df.columns:
+            print(f"ny={ny}: column 'Cl' not found, skipping.")
+            continue
+
+        Cl = df["Cl"]
+        T = np.linspace(0.0, nt * dt, nt, dtype=float)
+        ax2.plot(T, Cl, lw=LINE_WIDTH, color=styles[ny]["color"],
+                 alpha=styles[ny].get("alpha", 1.0), label=f"ny={ny}")
+
+        signal = df["Cl"].values[:nt].astype(float)
+        cut    = _transient_cut(nt)
+        times  = np.linspace(cut * dt, nt * dt, nt - cut, dtype=float)
+        signal = signal[cut:]
+ 
+        freq = dominant_frequency(signal, dt)
+        ny_vals.append(ny)
+        freq_vals.append(freq)
+        print(f"ny={ny:4d} | f(Cl) = {freq:.4f} Hz")
+ 
+        color = styles[ny]["color"]
+        ax.plot(times, signal, lw=LINE_WIDTH, color=color,
+                alpha=styles[ny].get("alpha", 1.0), label=f"ny={ny}")
+ 
+    ax.set_xlabel("Time (s)", fontsize=LABEL_SIZE)
+    ax.set_ylabel(r"$C_l$", fontsize=LABEL_SIZE)
+    ax.legend(fontsize=LEGEND_SIZE)
+    apply_style(ax)
+    fig_1.tight_layout()
+
+    ax2.set_xlabel("Time (s)", fontsize=LABEL_SIZE)
+    ax2.set_ylabel(r"$C_l$", fontsize=LABEL_SIZE)
+    ax2.legend(fontsize=LEGEND_SIZE)
+    apply_style(ax2)
+    fig_2.tight_layout()
+ 
+    ROOT_OUT.mkdir(parents=True, exist_ok=True)
+    fig_1.savefig(ROOT_OUT / f"vk_cl_time_{SOLVER}.pdf", format="pdf")
+    print(f"Saved: {ROOT_OUT / f'vk_cl_time_{SOLVER}.pdf'}")
+    fig_2.savefig(ROOT_OUT / f"vk_cl_{SOLVER}.pdf", format="pdf")
+    print(f"Saved: {ROOT_OUT / f'vk_cl_{SOLVER}.pdf'}")
+ 
+    _plot_frequency_convergence(ny_vals, freq_vals, ylabel=r"$f_{C_l}$ (Hz)",
+                                 out_name=f"vk_freq_cl_{SOLVER}.pdf")
+    plt.show()
+ 
+# ---------------------------------------------------------------------------
+# shared helper — frequency convergence vs ny
+# ---------------------------------------------------------------------------
+ 
+def _plot_frequency_convergence(ny_vals, freq_vals, ylabel: str, out_name: str):
+    """
+    Plot dominant frequency vs resolution (ny) and save to ROOT_OUT.
+    Called internally by every cmd_plot_* function.
+    """
+    if len(ny_vals) < 2:
+        return
+ 
+    fig, ax = plt.subplots(figsize=(7, 5))
+ 
+    ax.plot(ny_vals, freq_vals, "o-", lw=FIT_WIDTH, ms=7,
+            color=_PALETTE[0], label=ylabel)
+ 
+    ax.set_xlabel(r"Resolution $n_y$", fontsize=LABEL_SIZE)
+    ax.set_ylabel(ylabel, fontsize=LABEL_SIZE)
+    ax.legend(fontsize=LEGEND_SIZE)
+    apply_style(ax)
+    fig.tight_layout()
+ 
+    ROOT_OUT.mkdir(parents=True, exist_ok=True)
+    fig.savefig(ROOT_OUT / out_name, format="pdf")
+    print(f"Saved: {ROOT_OUT / out_name}")
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
  
 def main():
-    parser = argparse.ArgumentParser(
-        description="Uniform flow: validation of numerical method"
-    )
-    subparsers = parser.add_subparsers(dest="mode", required=True)
  
+    parser = argparse.ArgumentParser(description="Taylor–Green vortex validation")
+    sub = parser.add_subparsers(dest="mode", required=True)
+
+    # -------------------------
     # run
-    run_p = subparsers.add_parser("run", help="Build configs and launch simulations")
-    run_p.add_argument("binary", type=pathlib.Path, help="Simulation binary")
-    run_p.add_argument("-i", "--input",  required=True, type=pathlib.Path,
-                       help="Base JSON config")
-    run_p.add_argument("-o", "--output", required=True, type=pathlib.Path,
-                       help="Output directory")
- 
-    # plot
-    plot_p = subparsers.add_parser("plot",
-        help="Plot velocity at probe point over time")
-    plot_p.add_argument("--csv", required=True, type=str,
-                        help="Path to simulation CSV output")
-    plot_p.add_argument("-i", "--input", required=True, type=pathlib.Path,
-                        help="JSON config used for that run")
-    plot_p.add_argument("--ix", required=False, type=int, default=None,
-                        help="Grid index ix of the probe point (default: nx//4)")
-    plot_p.add_argument("--iy", required=False, type=int, default=None,
-                        help="Grid index iy of the probe point (default: ny//4)")
- 
-    # slice
-    slice_p = subparsers.add_parser("slice",
-        help="Plot velocity profile along y at multiple timesteps")
-    slice_p.add_argument("--csv", required=True, type=pathlib.Path,
-                         help="Slice CSV file (vx_slice.csv)")
-    slice_p.add_argument("-i", "--input", required=True, type=pathlib.Path,
-                         help="JSON config used for that run")
-    slice_p.add_argument("--every", type=int, default=1,
-                         help="Plot every Nth stored timestep (default: 1)")
-    
-    compare_p = subparsers.add_parser("compare",
-        help="Plot last vx slice for all resolutions on one figure")
-    compare_p.add_argument("-i", "--input", required=True, type=pathlib.Path,
-                        help="Base JSON config")
-    
-    conv_p = subparsers.add_parser("convergence",
-        help="Plot vx at probe point over time for all resolutions")
-    conv_p.add_argument("-i", "--input", required=True, type=pathlib.Path,
-                        help="Base JSON config")
-    
-    error_p = subparsers.add_parser("error",
-        help="Plot mean slice error over time for all resolutions")
-    error_p.add_argument("-i", "--input", required=True, type=pathlib.Path,
-                          help="Base JSON config")
- 
+    # -------------------------
+    run_p = sub.add_parser("run")
+    run_p.add_argument("binary", type=pathlib.Path)
+    run_p.add_argument("-i", "--input", required=True, type=pathlib.Path)
+
+    # -------------------------
+    # plotting commands
+    # -------------------------
+    sub.add_parser("plot_vx", help="Von Kármán vx time history + frequency")
+    sub.add_parser("plot_vy", help="Von Kármán vy time history + frequency")
+    sub.add_parser("plot_p",  help="Von Kármán pressure time history + frequency")
+
+    # ✅ plot_cl with debug flag
+    plot_cl_p = sub.add_parser("plot_cl", help="Von Kármán Cl time history + shedding frequency")
+    plot_cl_p.add_argument(
+        "--debug_fft",
+        action="store_true",
+        help="Show FFT spectrum for each run"
+    )
+
     args = parser.parse_args()
  
     if args.mode == "run":
-        args.output.mkdir(parents=True, exist_ok=True)
         folder = build_folder(args)
         launch_sims(args, folder)
- 
-    elif args.mode == "plot":
-        cmd_plot(args)
- 
-    elif args.mode == "slice":
-        plot_slice(args.csv, args.input, args.every)
-
-    elif args.mode == "compare":
-        cmd_compare(args)
- 
-    elif args.mode == "convergence":
-        cmd_convergence(args)
-
-    elif args.mode == "error":
-        cmd_error(args)
+    elif args.mode == "plot_vx":  cmd_plot_vx(args)
+    elif args.mode == "plot_vy":  cmd_plot_vy(args)
+    elif args.mode == "plot_p":   cmd_plot_p(args)
+    elif args.mode == "plot_cl":  cmd_plot_cl(args)
+    
  
  
 if __name__ == "__main__":

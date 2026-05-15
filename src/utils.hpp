@@ -83,6 +83,7 @@ float free_surface_area(scalar_field *dom, float dx);
 float depth(scalar_field *dom, int idx, float dx);
 std::vector<float> computeCoefficients(scalar_field *dom, scalar_field *p, float dx, 
                         float U_inf, float rho, float A_ref, std::ofstream &log_file);
+float energy(scalar_field *vx, scalar_field *vy);
 std::vector<float> slice_vertical(scalar_field *vx, int i_fixed, int j_start, int j_end) ;
 void write_metrics(std::ofstream& f, const Metrics& m);
 void write_header(std::ofstream& f, const std::vector<std::string>& headers);

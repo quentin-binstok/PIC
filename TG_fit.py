@@ -31,10 +31,13 @@ import subprocess
 import os
  
  
-NX_LIST = [25, 50, 100, 200, 400]
-ROOT_SIM = pathlib.Path("taylor_green_sim/APIC")
-ROOT_OUT = pathlib.Path("Taylor_Green/APIC")
- 
+
+NX_LIST = [50, 100, 150, 200, 250]
+NT_LIST = [250, 500, 1000, 2000, 4000]
+ROOT_SIM = pathlib.Path("taylor_green_sim/APIC_dt")
+ROOT_OUT = pathlib.Path("Taylor_Green/APIC_dt")
+SOLVER = "APIC"
+
 # ---------------------------------------------------------------------------
 # Global plot style
 # ---------------------------------------------------------------------------
@@ -166,14 +169,15 @@ def load_run(json_path, csv_path, probe_ix=None, probe_iy=None):
     x = probe_ix * dx
     y = probe_iy * dx
  
-    times = np.linspace(0.0, nt * dt, nt, dtype=float)[1:]
+    times = np.linspace(0.0, nt * dt, nt, dtype=float)
  
     df    = read_csv(csv_path)
     col_u = f"vx_{probe_ix}_{probe_iy}"
     col_v = f"vy_{probe_ix}_{probe_iy}"
- 
-    sim_u = df[col_u].values[1:nt]
-    sim_v = df[col_v].values[1:nt]
+
+    energy = df["energy"].values
+    sim_u = df[col_u].values
+    sim_v = df[col_v].values
  
     ana_u = tg_u(x, y, times, nu)
     ana_v = tg_v(x, y, times, nu)
@@ -184,6 +188,7 @@ def load_run(json_path, csv_path, probe_ix=None, probe_iy=None):
         x=x, y=y, times=times,
         sim_u=sim_u, sim_v=sim_v,
         ana_u=ana_u, ana_v=ana_v,
+        energy=energy,
     )
  
  
@@ -193,39 +198,44 @@ def load_run(json_path, csv_path, probe_ix=None, probe_iy=None):
  
 def build_folder(args):
  
-    temp = pathlib.Path("taylor_green_sim/APIC")
+    temp = ROOT_SIM
     temp.mkdir(exist_ok=True)
-    pathlib.Path("Taylor_Green/APIC").mkdir(exist_ok=True)
+    ROOT_OUT.mkdir(exist_ok=True)
  
     with open(args.input) as f:
         base = json.load(f)
     
-    base_dx  = base["space_steps"]
-    base_dt  = base["delta_t"]
-    base_nt  = base["nt"]
-    base_T   = base_dt * base_nt
-    base_cfl = base_dt / base_dx
+    base_T = 20.0
+    base_L = np.pi
+    CFL = 0.5
  
     def slice_timesteps(nt):
         return [1, nt // 3, 2 * nt // 3, nt - 2]
  
     for nx in NX_LIST:
-        ratio = nx / base["grid"][0]
-        dx    = base_dx / ratio
-        dt    = base_cfl * dx
-        nt    = int(round(base_T / dt))
+        """ nx    = 100 """
+        dx    = base_L / nx
+        dt    = CFL * dx  # CFL condition for stability
+        nt    = int(base_T / dt)
  
         work = copy.deepcopy(base)
+        work["solver"]      = "pic"
         work["grid"]        = [nx, nx]
         work["space_steps"] = dx
         work["delta_t"]     = dt
         work["nt"]          = nt
-        work["dir"]         = f"Taylor_Green/APIC/nx_{nx}"
+        work["dir"]         = str(ROOT_OUT / f"nx_{nx}")
+        work["sampling_rate"] = nt//25  # ~100 samples per run
+        work["flip"]    = 0.0
+
  
         work["metrics"][0]["idx"] = [nx // 4, nx // 4]
         work["metrics"][1]["idx"] = [nx // 4, nx // 4]
+        work["metrics"][2]["idx"] = [nx // 4, nx // 4]
+
+        work["taylor_green"][0]["wavenumber"] = np.pi / base_L
  
-        work["slice_x_csv"] = {
+        """ work["slice_x_csv"] = {
             "enabled": True,
             "field": "vx",
             "type": "vertical",
@@ -245,7 +255,7 @@ def build_folder(args):
             "j_end": nx - 1,
             "timesteps": slice_timesteps(nt),
             "file": "vy_slice.csv",
-        }
+        } """
  
         with open(temp / f"tgv_nx_{nx}.json", "w") as f:
             json.dump(work, f, indent=2)
@@ -285,7 +295,7 @@ def cmd_plot(args):
         csv_path  = ROOT_OUT / f"nx_{nx}" / "metrics_SL_GL.csv"
  
         if not json_path.exists() or not csv_path.exists():
-            print(f"nx={nx}: missing files, skipping.")
+            print(f"nt={nx}: missing files, skipping.")
             continue
  
         run = load_run(json_path, csv_path)
@@ -298,14 +308,16 @@ def cmd_plot(args):
         x = (ix + 0.5) * dx
         y = (iy + 0.5) * dx
  
-        times = run["times"]
-        sim_u = run["sim_u"]
-        sim_v = run["sim_v"]
+        times = run["times"][1:]
+        sim_u = run["sim_u"][1:]
+        sim_v = run["sim_v"][1:]
+
+        k = data["taylor_green"][0]["wavenumber"]
  
-        cut = int(0.1 * len(times))
+        """ cut = int(0.1 * len(times))
         times = times[cut:]
         sim_u = sim_u[cut:]
-        sim_v = sim_v[cut:]
+        sim_v = sim_v[cut:] """
  
         nu_u, _, u0_u, _ = fit_numerical_viscosity(times, sim_u, u0_guess=sim_u[0])
         nu_v, _, u0_v, _ = fit_numerical_viscosity(times, sim_v, u0_guess=sim_v[0])
@@ -321,12 +333,11 @@ def cmd_plot(args):
         ax_v.plot(times, sim_v, color=color, lw=LINE_WIDTH, label=rf"$n_x={nx}$")
         ax_v.plot(times, fit_v, color=color, lw=FIT_WIDTH, ls="--")
  
-        if ana_u_ref is None:
-            ana_u_ref = tg_u(np.pi / 4, np.pi / 4, times, 0)
-            ana_v_ref = tg_v(np.pi / 4, np.pi / 4, times, 0)
-            times_ref = times
+        ana_u_ref = tg_u(k*x, k*y, times, 0)
+        ana_v_ref = tg_v(k*x, k*y, times, 0)
+        times_ref = times
  
-        print(f"nx={nx:4d} | nu_num(vx)={nu_u:.4e} | nu_num(vy)={nu_v:.4e}")
+        print(f"nt={nx:4d} | nu_num(vx)={nu_u:.4e} | nu_num(vy)={nu_v:.4e}")
  
     for ax, ana_ref, ylabel, title in [
         (ax_u, ana_u_ref, r"$v_x$", "Taylor–Green vortex — $v_x(t)$ numerical decay"),
@@ -342,8 +353,18 @@ def cmd_plot(args):
  
     fig_u.tight_layout()
     fig_v.tight_layout()
+    
+    """ # ✅ Ensure output directory exists
+    ROOT_OUT.mkdir(parents=True, exist_ok=True)
+
+    # ✅ Save figures
+    fig_u.savefig(ROOT_OUT / f"conv_vx_{SOLVER}.pdf", format="pdf")
+    fig_v.savefig(ROOT_OUT / f"conv_vy_{SOLVER}.pdf", format="pdf")
+
+    print(f"Saved: {ROOT_OUT / f'conv_vx_{SOLVER}.pdf'}")
+    print(f"Saved: {ROOT_OUT / f'conv_vy_{SOLVER}.pdf'}") """
+
     plt.show()
- 
  
 def cmd_convergence(args):
     """
@@ -374,6 +395,8 @@ def cmd_convergence(args):
         ix, iy = data["metrics"][0]["idx"]
         x = (ix+0.5) * dx
         y = (iy+0.5) * dx
+
+        k = data["taylor_green"][0]["wavenumber"]
  
         times = np.linspace(0.0, nt * dt, nt, dtype=float)[1:]
  
@@ -386,8 +409,8 @@ def cmd_convergence(args):
         ax_x.plot(times, sim_u, lw=LINE_WIDTH, color=color, label=f"nx={nx}")
         ax_y.plot(times, sim_v, lw=LINE_WIDTH, color=color, label=f"nx={nx}")
  
-        ana_u_ref = tg_u(x, y, times, 0)
-        ana_v_ref = tg_v(x, y, times, 0)
+        ana_u_ref = tg_u(k*x, k*y, times, 0)
+        ana_v_ref = tg_v(k*x, k*y, times, 0)
         times_ref = times
  
     for ax, ana_ref, ylabel in [
@@ -403,20 +426,26 @@ def cmd_convergence(args):
  
     fig_x.tight_layout()
     fig_y.tight_layout()
+
+    
+# ✅ Ensure output directory exists
+    ROOT_OUT.mkdir(parents=True, exist_ok=True)
+
+    # ✅ Save figures
+    fig_x.savefig(ROOT_OUT / f"vx_{SOLVER}.pdf", format="pdf")
+    fig_y.savefig(ROOT_OUT / f"vy_{SOLVER}.pdf", format="pdf")
+
+    print(f"Saved: {ROOT_OUT / f'vx_{SOLVER}.pdf'}")
+    print(f"Saved: {ROOT_OUT / f'vy_{SOLVER}.pdf'}")
+
     plt.show()
- 
  
 def cmd_compare(args):
     """
     Compare vx and vy vertical slices across all resolutions.
     """
  
-    styles = _resolution_styles(NX_LIST)
- 
-    with open(args.input) as f:
-        base = json.load(f)
- 
-    nu = base.get("viscosity", 0.0)
+    styles = _resolution_styles(NT_LIST)
  
     fig_x, ax_x = plt.subplots(figsize=(6, 7))
     fig_y, ax_y = plt.subplots(figsize=(6, 7))
@@ -466,8 +495,8 @@ def cmd_compare(args):
             x_ref, y_ref, t_ref = x, y, t
  
     if x_ref is not None:
-        vx_ana = tg_u(x_ref, y_ref, t_ref, nu)
-        vy_ana = tg_v(x_ref, y_ref, t_ref, nu)
+        vx_ana = tg_u(x_ref, y_ref, t_ref, 0)
+        vy_ana = tg_v(x_ref, y_ref, t_ref, 0)
         ax_x.plot(vx_ana, y_ref, color="black", lw=FIT_WIDTH, ls="--",
                   zorder=10, label="Inviscid solution")
         ax_y.plot(vy_ana, y_ref, color="black", lw=FIT_WIDTH, ls="--",
@@ -483,82 +512,249 @@ def cmd_compare(args):
     fig_y.tight_layout()
     plt.show()
  
- 
-def cmd_viscosity_convergence(args):
+def cmd_viscosity_dx(args):
     """
     Taylor–Green vortex:
     Plot extracted numerical viscosity versus grid spacing dx.
     """
- 
+
     dx_vals   = []
     nu_u_vals = []
     nu_v_vals = []
- 
+    nu_e_vals = []
+
     for nx in NX_LIST:
         json_path = ROOT_SIM / f"tgv_nx_{nx}.json"
         csv_path  = ROOT_OUT / f"nx_{nx}" / "metrics_SL_GL.csv"
- 
+
         if not json_path.exists() or not csv_path.exists():
             print(f"nx={nx}: missing files, skipping.")
             continue
- 
+
         run = load_run(json_path, csv_path)
- 
+
         times = run["times"]
         sim_u = run["sim_u"]
         sim_v = run["sim_v"]
- 
-        cut   = int(0.1 * len(times))
-        times = times[cut:]
-        sim_u = sim_u[cut:]
-        sim_v = sim_v[cut:]
- 
+
         nu_u, _, _, _ = fit_numerical_viscosity(times, sim_u, u0_guess=sim_u[0])
         nu_v, _, _, _ = fit_numerical_viscosity(times, sim_v, u0_guess=sim_v[0])
+
+        # --- energy fit ---
+        times_e = run["times"][1:]
+        energy  = run["energy"][1:]
+        E_0     = energy[0]
+        cut     = int(0.1 * len(times_e))
+        times_e = times_e[cut:]
+        energy  = energy[cut:] / E_0
+        nu_e, _, _, _ = fit_numerical_viscosity(times_e, energy, u0_guess=energy[0])
+
         dx = run["dx"]
- 
+
         dx_vals.append(dx)
         nu_u_vals.append(abs(nu_u))
         nu_v_vals.append(abs(nu_v))
- 
-        print(f"nx={nx:4d} | dx={dx:.4e} | nu_x={nu_u:.4e} | nu_y={nu_v:.4e}")
- 
+        nu_e_vals.append(abs(nu_e) / 2)
+
+        print(f"nx={nx:4d} | dx={dx:.4e} | nu_x={nu_u:.4e} | nu_y={nu_v:.4e} | nu_e={nu_e/2:.4e}")
+
     dx_vals   = np.array(dx_vals)
     nu_u_vals = np.array(nu_u_vals)
     nu_v_vals = np.array(nu_v_vals)
- 
+    nu_e_vals = np.array(nu_e_vals)
+
     p_u = np.polyfit(np.log(dx_vals), np.log(nu_u_vals), 1)[0]
     p_v = np.polyfit(np.log(dx_vals), np.log(nu_v_vals), 1)[0]
- 
+    p_e = np.polyfit(np.log(dx_vals), np.log(nu_e_vals), 1)[0]
+
     print(f"\nObserved convergence orders:")
     print(f"  nu_x ~ dx^{p_u:.3f}")
     print(f"  nu_y ~ dx^{p_v:.3f}")
- 
-    fig, ax = plt.subplots(figsize=(8, 6))
- 
-    ax.loglog(dx_vals, nu_u_vals, "o-", lw=FIT_WIDTH, ms=8,
+    print(f"  nu_e ~ dx^{p_e:.3f}")
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+
+    ax.loglog(dx_vals, nu_u_vals, "o-",  lw=FIT_WIDTH, ms=8,
               color=_PALETTE[0],
               label=rf"$\nu_x \sim \Delta x^{{{p_u:.2f}}}$")
- 
     ax.loglog(dx_vals, nu_v_vals, "s--", lw=FIT_WIDTH, ms=8,
               color=_PALETTE[2],
               label=rf"$\nu_y \sim \Delta x^{{{p_v:.2f}}}$")
- 
+    ax.loglog(dx_vals, nu_e_vals, "^:",  lw=FIT_WIDTH, ms=8,
+              color=_PALETTE[1],
+              label=rf"$\nu_e \sim \Delta x^{{{p_e:.2f}}}$")
+
     dx_ref = np.linspace(dx_vals.min(), dx_vals.max(), 200)
     ref1   = nu_u_vals[0] * (dx_ref / dx_vals[0]) ** 1
     ref2   = nu_u_vals[0] * (dx_ref / dx_vals[0]) ** 2
- 
-    ax.loglog(dx_ref, ref1, ":", color="gray", lw=1.8, label="slope 1")
-    ax.loglog(dx_ref, ref2, "--", color="gray", lw=1.8, label="slope 2")
- 
+
+    ax.loglog(dx_ref, ref1, ":", color="gray", lw=1.8, label="order 1")
+    ax.loglog(dx_ref, ref2, "--", color="gray", lw=1.8, label="order 2")
+
     ax.set_xlabel(r"$\Delta x$", fontsize=LABEL_SIZE)
-    ax.set_ylabel(r"Numerical viscosity $\nu_{\mathrm{num}}$", fontsize=LABEL_SIZE)
-    ax.set_title("Taylor–Green vortex — numerical viscosity convergence",
-                 fontsize=TITLE_SIZE)
+    ax.set_ylabel(r"$\nu_{\mathrm{num}}$", fontsize=LABEL_SIZE)
     ax.legend(fontsize=LEGEND_SIZE)
     apply_style(ax)
- 
     fig.tight_layout()
+
+    ROOT_OUT.mkdir(parents=True, exist_ok=True)
+    fig.savefig(ROOT_OUT / f"visc_num_dx_{SOLVER}.pdf", format="pdf")
+    print(f"Saved: {ROOT_OUT / f'visc_num_dx_{SOLVER}.pdf'}")
+    plt.show()
+
+
+def cmd_viscosity_dt(args):
+    """
+    Taylor–Green vortex:
+    Plot extracted numerical viscosity versus time step dt.
+    """
+
+    dt_vals   = []
+    nu_u_vals = []
+    nu_v_vals = []
+    nu_e_vals = []
+
+    for nt in NT_LIST:
+        json_path = ROOT_SIM / f"tgv_nt_{nt}.json"
+        csv_path  = ROOT_OUT / f"nt_{nt}" / "metrics_SL_GL.csv"
+
+        if not json_path.exists() or not csv_path.exists():
+            print(f"nt={nt}: missing files, skipping.")
+            continue
+
+        run = load_run(json_path, csv_path)
+
+        times = run["times"]
+        sim_u = run["sim_u"]
+        sim_v = run["sim_v"]
+
+        nu_u, _, _, _ = fit_numerical_viscosity(times, sim_u, u0_guess=sim_u[0])
+        nu_v, _, _, _ = fit_numerical_viscosity(times, sim_v, u0_guess=sim_v[0])
+
+        # --- energy fit ---
+        times_e = run["times"][1:]
+        energy  = run["energy"][1:]
+        E_0     = energy[0]
+        cut     = int(0.1 * len(times_e))
+        times_e = times_e[cut:]
+        energy  = energy[cut:] / E_0
+        nu_e, _, _, _ = fit_numerical_viscosity(times_e, energy, u0_guess=energy[0])
+
+        dt = run["dt"]
+
+        dt_vals.append(dt)
+        nu_u_vals.append(abs(nu_u))
+        nu_v_vals.append(abs(nu_v))
+        nu_e_vals.append(abs(nu_e) / 2)
+
+        print(f"nt={nt:4d} | dt={dt:.4e} | nu_x={nu_u:.4e} | nu_y={nu_v:.4e} | nu_e={nu_e/2:.4e}")
+
+    dt_vals   = np.array(dt_vals)
+    nu_u_vals = np.array(nu_u_vals)
+    nu_v_vals = np.array(nu_v_vals)
+    nu_e_vals = np.array(nu_e_vals)
+
+    p_u = np.polyfit(np.log(dt_vals), np.log(nu_u_vals), 1)[0]
+    p_v = np.polyfit(np.log(dt_vals), np.log(nu_v_vals), 1)[0]
+    p_e = np.polyfit(np.log(dt_vals), np.log(nu_e_vals), 1)[0]
+
+    print(f"\nObserved convergence orders:")
+    print(f"  nu_x ~ dt^{p_u:.3f}")
+    print(f"  nu_y ~ dt^{p_v:.3f}")
+    print(f"  nu_e ~ dt^{p_e:.3f}")
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+
+    ax.loglog(dt_vals, nu_u_vals, "o-",  lw=FIT_WIDTH, ms=8,
+              color=_PALETTE[0],
+              label=rf"$\nu_x \sim \Delta t^{{{p_u:.2f}}}$")
+    ax.loglog(dt_vals, nu_v_vals, "s--", lw=FIT_WIDTH, ms=8,
+              color=_PALETTE[2],
+              label=rf"$\nu_y \sim \Delta t^{{{p_v:.2f}}}$")
+    ax.loglog(dt_vals, nu_e_vals, "^:",  lw=FIT_WIDTH, ms=8,
+              color=_PALETTE[1],
+              label=rf"$\nu_e \sim \Delta t^{{{p_e:.2f}}}$")
+
+    dt_ref = np.linspace(dt_vals.min(), dt_vals.max(), 200)
+    ref_1  = nu_u_vals[0] * (dt_ref / dt_vals[0]) ** -1
+    ref1   = nu_u_vals[0] * (dt_ref / dt_vals[0]) ** 1
+    ref2   = nu_u_vals[0] * (dt_ref / dt_vals[0]) ** 2
+
+    ax.loglog(dt_ref, ref_1, ":", color="gray", lw=1.8, label="order -1")
+    ax.loglog(dt_ref, ref1,  ":", color="gray", lw=1.8, label="order 1")
+    ax.loglog(dt_ref, ref2,  "--", color="gray", lw=1.8, label="order 2")
+
+    ax.set_xlabel(r"$\Delta t$", fontsize=LABEL_SIZE)
+    ax.set_ylabel(r"$\nu_{\mathrm{num}}$", fontsize=LABEL_SIZE)
+    ax.legend(fontsize=LEGEND_SIZE)
+    apply_style(ax)
+    fig.tight_layout()
+
+    ROOT_OUT.mkdir(parents=True, exist_ok=True)
+    fig.savefig(ROOT_OUT / f"visc_num_dt_{SOLVER}.pdf", format="pdf")
+    print(f"Saved: {ROOT_OUT / f'visc_num_dt_{SOLVER}.pdf'}")
+    plt.show()
+
+def cmd_energy(args):
+    """
+    Taylor–Green vortex:
+    Plot vx(t) and vy(t) for ALL resolutions on the SAME figures,
+    including exponential decay fits and extracted numerical viscosity.
+    """
+
+    styles = _resolution_styles(NX_LIST)
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+
+    for nx in NX_LIST:
+
+        json_path = ROOT_SIM / f"tgv_nx_{nx}.json"
+        csv_path  = ROOT_OUT / f"nx_{nx}" / "metrics_SL_GL.csv"
+
+        if not json_path.exists() or not csv_path.exists():
+            print(f"nx={nx}: missing files, skipping.")
+            continue
+
+        run = load_run(json_path, csv_path)
+
+        with open(json_path) as f:
+            data = json.load(f)
+
+        times  = run["times"][1:]
+        energy = run["energy"][1:]
+
+        E_0 = energy[0]
+
+        cut = 0.1 * len(times)
+        times = times[int(cut):]
+        energy = energy[int(cut):]
+
+        energy = energy / E_0
+
+        nu_e, _, u0_e, _ = fit_numerical_viscosity(times, energy, u0_guess=energy[0])
+        fit_e = decaying_exponential(times, u0_e, nu_e)
+
+        color = styles[nx]["color"]
+
+        ax.plot(times, energy, color=color, lw=LINE_WIDTH, label=rf"$n_x={nx}$")
+        ax.plot(times, fit_e,  color=color, lw=FIT_WIDTH,  ls="--")
+
+        print(f"nx={nx:4d} | nu_num(energy)={nu_e/2:.4e}")
+
+    ax.set_xlabel("Time (s)", fontsize=LABEL_SIZE)
+    ax.set_ylim(0.2, 1.05)
+    ax.set_ylabel(r"$E(t) / E(0)$", fontsize=LABEL_SIZE)
+    ax.legend(fontsize=LEGEND_SIZE)
+    apply_style(ax)
+    fig.tight_layout()
+
+    # ✅ Ensure output directory exists
+    ROOT_OUT.mkdir(parents=True, exist_ok=True)
+
+    # ✅ Save figures
+    fig.savefig(ROOT_OUT / f"energy_{SOLVER}.pdf", format="pdf")
+
+    print(f"Saved: {ROOT_OUT / f'energy_{SOLVER}.pdf'}")
     plt.show()
  
  
@@ -584,16 +780,19 @@ def main():
  
     conv_p = sub.add_parser("convergence",
         help="Probe velocity over time for all resolutions")
-    conv_p.add_argument("-i", "--input", required=True, type=pathlib.Path)
  
     compare_p = sub.add_parser("compare",
         help="Compare vx slice across all resolutions")
-    compare_p.add_argument("-i", "--input", required=True, type=pathlib.Path)
  
-    viscosity_p = sub.add_parser("viscosity",
+    viscosity_dx_p = sub.add_parser("viscosity_dx",
         help="Plot extracted numerical viscosity vs dx convergence")
-    viscosity_p.add_argument("-i", "--input", required=True, type=pathlib.Path)
- 
+
+    viscosity_dt_p = sub.add_parser("viscosity_dt",
+        help="Plot extracted numerical viscosity vs dt convergence")
+    
+    energy_p = sub.add_parser("energy",
+        help="Plot kinetic energy decay with exponential fit for all resolutions")
+
     args = parser.parse_args()
  
     if args.mode == "run":
@@ -605,8 +804,12 @@ def main():
         cmd_convergence(args)
     elif args.mode == "compare":
         cmd_compare(args)
-    elif args.mode == "viscosity":
-        cmd_viscosity_convergence(args)
+    elif args.mode == "viscosity_dx":
+        cmd_viscosity_dx(args)
+    elif args.mode == "viscosity_dt":
+        cmd_viscosity_dt(args)
+    elif args.mode == "energy":
+        cmd_energy(args)
  
 if __name__ == "__main__":
     main()
