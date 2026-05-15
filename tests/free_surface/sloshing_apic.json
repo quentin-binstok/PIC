@@ -1,5 +1,5 @@
 {
-	"solver": "pic",
+	"solver": "apic",
 	"iteration_algo": "SOR",
 	"sampling_rate": 50,
 	"log_file": "log.txt",
@@ -50,7 +50,7 @@
 	"special": {
 		"type": "sine",
 		"height": 23,
-		"amplitude": 11,
+		"amplitude": 15,
 		"frequency": 1.0
 	},
 
@@ -84,7 +84,7 @@
 		},
 		{
 			"header": "pressure",
-			"idx": [1, 47.25],
+			"idx": [1, 47],
 			"print": false
 		},
 		{

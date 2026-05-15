@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import numpy as np
 import matplotlib.pyplot as plt
 from pandas import read_csv
@@ -12,12 +14,14 @@ def build_folder(args):
     Builds the folder of json to launch
     """
 
-    temp_folder = "sloshing_sim"
-    pathlib.Path.mkdir(temp_folder)
-    temp_folder = pathlib.Path(temp_folder)
-
     with open(args.input, "r") as f_json:
         base_data = json.load(f_json)
+
+    temp_folder = "sloshing_sim"
+    if base_data["solver"] == "apic":
+        temp_folder = "sloshing_sim_apic"
+    pathlib.Path.mkdir(temp_folder)
+    temp_folder = pathlib.Path(temp_folder)
 
     with open(temp_folder / f"sloshing_base.json", "w") as file:
         json.dump(base_data, file)
@@ -31,7 +35,7 @@ def build_folder(args):
     base_height = base_data["special"]["height"]
     base_amp = base_data["special"]["amplitude"]
 
-    nx_arr = np.linspace(base_nx / 2, base_nx * 10, 10, dtype=int)
+    nx_arr = np.linspace(base_nx / 4, base_nx * 5, 10, dtype=int)
     for nx in nx_arr:
         nx = int(nx)
         ratio = nx / base_nx
@@ -66,7 +70,7 @@ def build_folder(args):
         with open(temp_folder / f"sloshing_nx_{nx}.json", "w") as file:
             json.dump(work_data, file)
 
-    nt_arr = np.linspace(base_nt / 2, base_nt * 10, 10, dtype=int)
+    nt_arr = np.geomspace(base_nt / 10, base_nt * 2, 20, dtype=int)
     for nt in nt_arr:
         nt = int(nt)
         work_data = copy.deepcopy(base_data)
@@ -80,6 +84,8 @@ def build_folder(args):
         if flip == base_flip:
             continue
         work_data = copy.deepcopy(base_data)
+        if work_data["solver"] == "apic":
+            continue
         work_data["flip"] = flip
         with open(temp_folder / f"sloshing_flip_{flip}.json", "w") as file:
             json.dump(work_data, file)

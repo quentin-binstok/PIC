@@ -334,6 +334,7 @@ float depth(scalar_field *dom, int idx, float dx) {
             break;
         }
     }
+
     return depth * dx;
 }
 
@@ -489,6 +490,8 @@ std::vector<std::string> build_headers(const json &metric_data) {
             headers.push_back("singularity_count");
         else if (h == "dirichlet")
             headers.push_back("dirichlet");
+        else if (h == "wave_front")
+            headers.push_back("wave_front");
     }
     return headers;
 }
@@ -594,6 +597,14 @@ Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx,
             m.values.push_back(dirichlet);
             if (metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0) {
                 std::cout << "Dirichlet cells: " << m.values.back() << "\n";
+            }
+        } else if (h == "wave_front") {
+            int idx = 1;
+            while (idx < dom->nx - 1 && depth(dom, idx, dx) != 0)
+                idx++;
+            m.values.push_back(idx * dx);
+            if (metric_data[k]["print"].get<bool>() && step % (nt / 10) == 0) {
+                std::cout << "Wave front at: " << m.values.back() << "\n";
             }
         } else {
             std::cerr << "Warning: unknown metric '" << h << "', inserting 0\n";

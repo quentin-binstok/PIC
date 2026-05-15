@@ -434,7 +434,8 @@ void compute_coeff(particle_field *particles, scalar_field *dom,
 void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
                scalar_field *vy, scalar_field *dom, scalar_field *T,
                int imposed_density, std::vector<int> &density, float dt,
-               RNG &rng, Metrics &m, std::ofstream &log_file) {
+               RNG &rng, Metrics &m, therm_bc *therm_bcs,
+               bool force_thermal_particles, std::ofstream &log_file) {
     int nx = vx->nx;
     int ny = vx->ny;
     float dx = vx->dx;
@@ -472,6 +473,20 @@ void fill_cell(int i, int j, particle_field *particles, scalar_field *vx,
             continue;
 
         float temp = interp_temp(x, y, dx, T);
+        if (force_thermal_particles && GET(dom, i, j) == DIRICHLET) {
+            int side = -1;
+            if (i == 0)
+                side = 0;
+            else if (i == nx - 1)
+                side = 1;
+            else if (j == 0)
+                side = 3;
+            else if (j == ny - 1)
+                side = 4;
+
+            if (side != -1 && therm_bcs->type[side] == DIRICHLET_THERM)
+                temp = therm_bcs->val[side];
+        }
 
         // Add particle
         particles->xyz.push_back(x);
@@ -512,6 +527,7 @@ void refill_domain(particle_field *particles, scalar_field *dom,
                    scalar_field *vx, scalar_field *vy, scalar_field *T,
                    std::vector<int> &density, int particle_density, bool refill,
                    float creation_rate, float dt, RNG &rng, Metrics &m,
+                   therm_bc *therm_bcs, bool force_thermal_particles,
                    std::ofstream &log_file) {
     LOG_INFO(log_file, "Refilling domain");
 
@@ -543,7 +559,8 @@ void refill_domain(particle_field *particles, scalar_field *dom,
 
 #pragma omp critical
                         fill_cell(i, j, particles, vx, vy, dom, T,
-                                  target_number, density, dt, rng, m, log_file);
+                                  target_number, density, dt, rng, m, therm_bcs,
+                                  force_thermal_particles, log_file);
                         LOG_INFO(log_file, "Refilling cell (" << i << ", " << j
                                                               << ") with "
                                                               << target_number
@@ -560,7 +577,8 @@ void refill_domain(particle_field *particles, scalar_field *dom,
 
 #pragma omp critical
                 fill_cell(i, j, particles, vx, vy, dom, T, target_number,
-                          density, dt, rng, m, log_file);
+                          density, dt, rng, m, therm_bcs,
+                          force_thermal_particles, log_file);
             }
 
             // --- LIQUID cells ---
@@ -569,15 +587,15 @@ void refill_domain(particle_field *particles, scalar_field *dom,
                 if (refill && cell_density < particle_density) {
 #pragma omp critical
                     fill_cell(i, j, particles, vx, vy, dom, T, particle_density,
-                              density, dt, rng, m, log_file);
+                              density, dt, rng, m, therm_bcs,
+                              force_thermal_particles, log_file);
                 } else if (cell_density < 1) {
                     SET(dom, i, j, AIR);
                 }
             }
 
             // --- AIR cells (convert back to liquid if needed) ---
-            else if (cell_type == AIR && i > 0 && i < nx - 1 && j > 0 &&
-                     j < ny - 1) {
+            else if (cell_type == AIR && i > 0 && i < nx && j > 0 && j < ny) {
 
                 if (cell_density > 0) {
                     SET(dom, i, j, LIQUID);

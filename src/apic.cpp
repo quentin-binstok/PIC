@@ -325,6 +325,8 @@ int solver_apic(json &data, std::ofstream &log_file,
     float k_sol = data.value("k_sol", k_liq);
     float rho_sol = data.value("rho_sol", rho_liq);
 
+    bool force_thermal_particles = data.value("force_thermal_particles", false);
+
     bool thermal = data.value("thermal", false);
     float mass = rho_liq * (dx * dx) / particle_density;
 
@@ -508,7 +510,8 @@ int solver_apic(json &data, std::ofstream &log_file,
         std::fill(density.begin(), density.end(), 0);
         check_particles(particles, dom, m, density, log_file);
         refill_domain(particles, dom, vx, vy, T, density, particle_density,
-                      refill, creation_rate, dt, rng, m, log_file);
+                      refill, creation_rate, dt, rng, m, therm_bcs,
+                      force_thermal_particles, log_file);
 
         t2 = std::chrono::high_resolution_clock::now();
 
@@ -516,6 +519,7 @@ int solver_apic(json &data, std::ofstream &log_file,
             apply_gravity(particles, g, dt, beta, T0);
 
         particles_to_grid(particles, mass, vx, vy, mass_x, mass_y, log_file);
+
         if (thermal)
             particles_temp_to_grid(particles, T, kern_sum_T, log_file);
 
@@ -546,12 +550,12 @@ int solver_apic(json &data, std::ofstream &log_file,
         // algorithm
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
+        grid_to_particles(particles, dom, vx, vy, m, log_file);
+
         if (thermal)
-            grid_to_particles(particles, dom, vx, vy, m, log_file);
+            grid_temp_to_particles(particles, T, log_file);
 
         t5 = std::chrono::high_resolution_clock::now();
-
-        advect(particles, vx, vy, dt, log_file);
 
         // save files
         if (sampling_rate && !(i % sampling_rate)) {
@@ -565,6 +569,8 @@ int solver_apic(json &data, std::ofstream &log_file,
 
             write_particles_vtp(particles, i, 0, 2, log_file, work_dir);
         }
+
+        advect(particles, vx, vy, dt, log_file);
 
         singularity = m.singularity_count;
         solid_particles = m.particle_in_solid;

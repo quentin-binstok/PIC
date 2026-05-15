@@ -1,0 +1,87 @@
+{
+	"solver": "apic",
+	"iteration_algo": "SOR",
+	"sampling_rate": 50,
+	"log_file": "log.txt",
+	"metrics_file": "metrics_convection_cells.csv",
+	"dir": "convection_cells_3_apic",
+	"flip": 0.95,
+
+	"grid": [300, 100],
+	"space_steps": 5e-3,
+	"nt": 10000,
+	"delta_t": 0.07,
+	"tol": 7e-5,
+	"tol_therm": 1e-6,
+	"max_iter": 1e5,
+	"rho": 987.16,
+
+	"gravity": true,
+	"g": 9.81,
+
+	"init_temperature": 325,
+	"T0": 325,
+	"beta": 4.7119e-4,
+	"c": 4182,
+	"k": 0.645,
+	"thermal": true,
+
+	"bc": [
+		{
+			"side": 0,
+			"type": 1.0
+		},
+		{
+			"side": 1,
+			"type": 1.0
+		},
+		{
+			"side": 2,
+			"type": 1.0
+		},
+		{
+			"side": 3,
+			"type": 1.0
+		}
+	],
+
+	"ic_vx": [
+		{
+			"tl": [50, 10],
+			"br": [150, 50],
+			"value": 0.001
+		}
+	],
+
+	"ic_cylinders": [],
+
+	"ic_cell": [],
+
+	"thermal_bcs": [
+		{
+			"side": "bottom",
+			"type": "DIRICHLET",
+			"val": 350
+		},
+		{
+			"side": "top",
+			"type": "DIRICHLET",
+			"val": 300
+		},
+		{
+			"side": "left",
+			"type": "NEUMANN",
+			"val": 0
+		},
+		{
+			"side": "right",
+			"type": "NEUMANN",
+			"val": 0
+		}
+	],
+
+	"particle_density": 8,
+	"refill": true,
+
+	"metrics": []
+}

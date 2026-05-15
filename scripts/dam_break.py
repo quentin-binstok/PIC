@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 Small script to compare dam break results with Ritter
 """
@@ -50,7 +52,7 @@ def build_folder(args):
     base_flip = base_data["flip"]
     base_nx_liq, base_ny_liq = base_data["ic_cell"][1]["br"]
 
-    nx_arr = np.linspace(base_nx / 2, base_nx * 10, 10, dtype=int)
+    nx_arr = np.linspace(base_nx / 5, base_nx * 5, 10, dtype=int)
     for nx in nx_arr:
         nx = int(nx)
         ratio = nx / base_nx
@@ -81,7 +83,7 @@ def build_folder(args):
         with open(temp_folder / f"dam_break_nx_{nx}.json", "w") as file:
             json.dump(work_data, file)
 
-    nt_arr = np.linspace(base_nt / 2, base_nt * 10, 10, dtype=int)
+    nt_arr = np.geomspace(base_nt / 10, base_nt * 2, 20, dtype=int)
     for nt in nt_arr:
         nt = int(nt)
         work_data = copy.deepcopy(base_data)
@@ -93,6 +95,8 @@ def build_folder(args):
     flip_arr = [0.0, 0.95, 0.98, 1.0]
     for flip in flip_arr:
         work_data = copy.deepcopy(base_data)
+        if work_data["solver"] == "apic":
+            continue
         work_data["flip"] = flip
         with open(temp_folder / f"dam_break_flip_{flip}.json", "w") as file:
             json.dump(work_data, file)

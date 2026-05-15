@@ -172,6 +172,8 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     float k_sol = data.value("k_sol", k_liq);
     float rho_sol = data.value("rho_sol", rho_liq);
 
+    bool force_thermal_particles = data.value("force_thermal_particles", false);
+
     uint32_t seed = data.value("seed", std::random_device{}());
     LOG_INFO(log_file, "Seed is " << seed);
 
@@ -399,7 +401,8 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
         std::fill(density.begin(), density.end(), 0);
         check_particles(particles, dom, m, density, log_file);
         refill_domain(particles, dom, vx, vy, T, density, particle_density,
-                      refill, creation_rate, dt, rng, m, log_file);
+                      refill, creation_rate, dt, rng, m, therm_bcs,
+                      force_thermal_particles, log_file);
 
         m = compute_metrics(dom, p, vx, vy, div, T, dx, i, nt, singularity,
                             solid_particles, dirichlet, m, data["metrics"],

@@ -1,7 +1,7 @@
 {
 	"solver": "pic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 1,
+	"sampling_rate": 10,
 	"log_file": "log.txt",
 	"metrics_file": "metrics_dam_break.csv",
 	"dir": "dam_break",
@@ -9,8 +9,8 @@
 
 	"grid": [268, 100],
 	"space_steps": 0.006,
-	"nt": 1000,
-	"delta_t": 0.002,
+	"nt": 10000,
+	"delta_t": 0.0002,
 	"tol": 3e-3,
 	"max_iter": 1e5,
 	"rho": 997.0,
@@ -78,6 +78,10 @@
 		{
 			"header": "pressure",
 			"idx": [266, 14],
+			"print": false
+		},
+		{
+			"header": "wave_front",
 			"print": false
 		}
 	]

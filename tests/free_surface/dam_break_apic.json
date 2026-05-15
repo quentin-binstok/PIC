@@ -1,19 +1,19 @@
 {
-	"solver": "pic",
+	"solver": "apic",
 	"iteration_algo": "SOR",
-	"sampling_rate": 50,
+	"sampling_rate": 10,
 	"log_file": "log.txt",
-	"metrics_file": "metrics_sloshing.csv",
-	"dir": "sloshing",
+	"metrics_file": "metrics_dam_break.csv",
+	"dir": "dam_break",
 	"flip": 0.95,
 
-	"grid": [150, 150],
-	"space_steps": 0.004,
+	"grid": [268, 100],
+	"space_steps": 0.006,
 	"nt": 10000,
-	"delta_t": 0.001,
-	"tol": 1e-3,
+	"delta_t": 0.0002,
+	"tol": 3e-3,
 	"max_iter": 1e5,
-	"rho": 1000.0,
+	"rho": 997.0,
 
 	"gravity": true,
 	"g": 9.81,
@@ -29,7 +29,7 @@
 		},
 		{
 			"side": 2,
-			"type": 1.0
+			"type": 2.0
 		},
 		{
 			"side": 3,
@@ -42,19 +42,17 @@
 	"ic_cell": [
 		{
 			"tl": [1, 1],
-			"br": [148, 148],
+			"br": [266, 98],
 			"value": 2.0
+		},
+		{
+			"tl": [1, 1],
+			"br": [98, 50],
+			"value": 0.0
 		}
 	],
 
-	"special": {
-		"type": "sine",
-		"height": 23,
-		"amplitude": 11,
-		"frequency": 1.0
-	},
-
-	"particle_density": 20,
+	"particle_density": 15,
 	"refill": false,
 
 	"metrics": [
@@ -64,32 +62,26 @@
 		},
 		{
 			"header": "pressure",
-			"idx": [1, 7],
+			"idx": [266, 1],
 			"print": false
 		},
 		{
 			"header": "pressure",
-			"idx": [1, 17],
+			"idx": [266, 3],
 			"print": false
 		},
 		{
 			"header": "pressure",
-			"idx": [1, 28],
+			"idx": [266, 6],
 			"print": false
 		},
 		{
 			"header": "pressure",
-			"idx": [1, 37],
+			"idx": [266, 14],
 			"print": false
 		},
 		{
-			"header": "pressure",
-			"idx": [1, 47.25],
-			"print": false
-		},
-		{
-			"header": "depth",
-			"idx": 3,
+			"header": "wave_front",
 			"print": false
 		}
 	]
