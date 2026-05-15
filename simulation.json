@@ -1,5 +1,5 @@
 {
-	"solver": "apic",
+	"solver": "pic",
 	"iteration_algo": "SOR",
 	"sampling_rate": 1,
 	"log_file": "log.txt",
@@ -14,20 +14,19 @@
 	"tol": 1e-3,
 	"tol_therm": 1e-5,
 	"max_iter": 1e5,
-	"rho": 1000.0,
+	"rho": 987.16,
 
 	"thermal": true,
-	"c": 4180.0,
-	"k": 6,
-	"beta": 2.5e-4,
-	"init_temperature": 310,
-	"T0": 293.15,
-	"rho_sol": 7850,
-	"c_sol": 490,
-	"k_sol": 500,
-	"rho_air": 1.2,
-	"c_air": 1000,
-	"k_air": 0.025,
+	"c": 4182,
+	"k": 0.645,
+	"beta": 4.71199e-4,
+	"init_temperature": 325,
+	"T0": 325,
+	"rho_sol": 8933,
+	"c_sol": 385,
+	"k_sol": 401,
+
+	"force_thermal_particles": true,
 
 	"gravity": false,
 	"g": 9.81,
@@ -36,7 +35,7 @@
 		{
 			"side": 0,
 			"type": 3.0,
-			"speed_x": 2.0
+			"speed_x": 0.5
 		},
 		{
 			"side": 1,
@@ -71,7 +70,7 @@
 		{
 			"side": "left",
 			"type": "DIRICHLET",
-			"val": 310
+			"val": 325
 		},
 		{
 			"side": "right",

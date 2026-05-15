@@ -19,9 +19,9 @@ class Infos:
 
     def plot(self, xvals, yvals, label: Optional[str] = None):
         if label:
-            self.ax.plot(xvals, yvals, "o", label=label, linewidth=1)
+            self.ax.plot(xvals, yvals, "o--", label=label, linewidth=1)
         else:
-            self.ax.plot(xvals, yvals, "o", linewidth=1)
+            self.ax.plot(xvals, yvals, "o--", linewidth=1)
 
         self.nb_plots += 1
 
@@ -31,6 +31,9 @@ class Infos:
 
         self.ax.set_xlabel(self.xlabel, fontsize=26)
         self.ax.set_ylabel(self.ylabel, fontsize=26)
+
+        self.ax.grid(True, which="major", linewidth=0.6, alpha=0.55)
+        self.ax.grid(True, which="minor", linewidth=0.2, alpha=0.25)
 
         if self.xlog:
             self.ax.set_xscale("log")
