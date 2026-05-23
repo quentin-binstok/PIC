@@ -318,7 +318,8 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
     int singularity = 0;
     int solid_particles = 0;
     int dirichlet = 0;
-    m = compute_metrics(dom, p, vx, vy, div, dx, 0, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+    m = compute_metrics(dom, p, vx, vy, div, T, dx,  0, nt, singularity, 
+                        solid_particles, dirichlet, m, data["metrics"], log_file);
     write_header(metrics_file, headers);
     write_metrics(metrics_file, m);
     
@@ -404,7 +405,7 @@ int solver_pic(json &data, std::ofstream &log_file, std::ofstream &metrics_file,
         refill_domain(particles, dom, vx, vy, T, density, particle_density,
                       refill, creation_rate, dt, rng, m, log_file);
 
-        m = compute_metrics(dom, p, vx, vy, div, dx, i, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
+        m = compute_metrics(dom, p, vx, vy, div, T, dx, i, nt, singularity, solid_particles, dirichlet, m, data["metrics"], log_file);
         write_metrics(metrics_file, m);
 
         

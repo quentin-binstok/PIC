@@ -34,9 +34,9 @@ import os
 
 NX_LIST = [50, 100, 150, 200, 250]
 NT_LIST = [250, 500, 1000, 2000, 4000]
-ROOT_SIM = pathlib.Path("taylor_green_sim/APIC_dt")
-ROOT_OUT = pathlib.Path("Taylor_Green/APIC_dt")
-SOLVER = "APIC"
+ROOT_SIM = pathlib.Path("taylor_green_sim/PIC_dt")
+ROOT_OUT = pathlib.Path("Taylor_Green/PIC_dt")
+SOLVER = "PIC"
 
 # ---------------------------------------------------------------------------
 # Global plot style
@@ -615,6 +615,8 @@ def cmd_viscosity_dt(args):
     nu_e_vals = []
 
     for nt in NT_LIST:
+        if nt == 250 or nt == 500:
+            continue  # skip the coarsest run which has too few points for a reliable fit
         json_path = ROOT_SIM / f"tgv_nt_{nt}.json"
         csv_path  = ROOT_OUT / f"nt_{nt}" / "metrics_SL_GL.csv"
 

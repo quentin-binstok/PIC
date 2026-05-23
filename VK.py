@@ -21,11 +21,11 @@ import os
  
  
 
-NY_LIST = [100, 125, 150, 200]
+NY_LIST = [100, 150, 200]
 NT_LIST = [250, 500, 1000, 2000, 4000]
-ROOT_SIM = pathlib.Path("von_karman_sim/APIC")
-ROOT_OUT = pathlib.Path("Von_Karman/APIC")
-SOLVER = "APIC"
+ROOT_SIM = pathlib.Path("von_karman_sim/SL")
+ROOT_OUT = pathlib.Path("Von_Karman/SL")
+SOLVER = "SL"
 
 # ---------------------------------------------------------------------------
 # Global plot style
@@ -145,30 +145,30 @@ def build_folder(args):
         base = json.load(f)
     
     base_T = 7.5
-    base_L = 3.0
-    CFL = 0.5
+    base_L = 1.0
+    CFL = 0.2
  
     def slice_timesteps(nt):
         return [1, nt // 3, 2 * nt // 3, nt - 2]
 
  
     for ny in NY_LIST:
-        nx    = 2*ny  # keep aspect ratio 4:1
+        nx    = 1.5*ny  # keep aspect ratio 4:1
         dx    = base_L / ny
         dt    = CFL * dx  # CFL condition for stability
         nt    = int(base_T / dt)
  
         work = copy.deepcopy(base)
-        work["solver"]      = "apic"
+        work["solver"]      = "pic"
         work["grid"]        = [nx, ny]
         work["space_steps"] = dx
         work["delta_t"]     = dt
         work["nt"]          = nt
         work["dir"]         = str(ROOT_OUT / f"ny_{ny}")
         work["sampling_rate"] = nt//50  # ~100 samples per run
-        work["flip"]    = 1.0
+        work["flip"]    = 0.95
 
-        work["ic_cylinders"][0]["center"] = [(int)(nx/6), (int)(ny/2)]
+        work["ic_cylinders"][0]["center"] = [(int)(nx/8), (int)(ny/2)]
         work["ic_cylinders"][0]["radius"] = (int)(ny/20)
 
 
@@ -262,7 +262,7 @@ def _load_vk_run(ny: int, col: str):
     return times, signal, dt, nt
  
  
-def _transient_cut(nt: int, fraction: float = 1/3) -> int:
+def _transient_cut(nt: int, fraction: float = 1/2) -> int:
     """Index at which the transient is considered over."""
     return int(fraction * nt)
  

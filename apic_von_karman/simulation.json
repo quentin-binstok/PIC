@@ -1,0 +1,113 @@
+{
+	"solver": "pic",
+	"iteration_algo": "SOR",
+	"sampling_rate": 10,
+	"log_file": "log.txt",
+	"metrics_file": "metrics_PIC_VK.csv",
+	"dir": "apic_von_karman",
+	"flip": 0.95,
+
+	"grid": [200, 100],
+	"space_steps": 5e-3,
+	"nt": 5000,
+	"delta_t": 0.002,
+	"tol": 1e-3,
+	"tol_therm": 1e-5,
+	"max_iter": 1e5,
+	"rho": 987.16,
+
+	"thermal": true,
+	"c": 4182,
+	"k": 0.645,
+	"beta": 4.71199e-4,
+	"init_temperature": 325,
+	"T0": 325,
+	"rho_sol": 8933,
+	"c_sol": 385,
+	"k_sol": 401,
+
+	"force_thermal_particles": true,
+
+	"gravity": false,
+	"g": 9.81,
+
+	"bc": [
+		{
+			"side": 0,
+			"type": 3.0,
+			"speed_x": 1.0
+		},
+		{
+			"side": 1,
+			"type": 2.0
+		},
+		{
+			"side": 2,
+			"type": 1.0
+		},
+		{
+			"side": 3,
+			"type": 1.0
+		}
+	],
+
+	"ic_cylinders": [
+		{
+			"center": [50, 50],
+			"radius": 20
+		}
+	],
+
+	"heat_gen": [
+		{
+			"center": [50, 50],
+			"radius": 10,
+			"value": 500000.0
+		}
+	],
+
+	"thermal_bcs": [
+		{
+			"side": "left",
+			"type": "DIRICHLET",
+			"val": 325
+		},
+		{
+			"side": "right",
+			"type": "NEUMANN",
+			"val": 0
+		},
+		{
+			"side": "top",
+			"type": "NEUMANN",
+			"val": 0
+		},
+		{
+			"side": "bottom",
+			"type": "NEUMANN",
+			"val": 0
+		}
+	],
+
+	"ic_cell": [],
+
+	"particle_density": 25,
+	"refill": true,
+
+	"metrics": [
+		{
+			"header": "vx",
+			"idx": [20, 50],
+			"print": false
+		},
+		{
+			"header": "pressure",
+			"idx": [20, 50],
+			"print": false
+		},
+		{
+			"header": "singularity_count",
+			"print": false
+		}
+	]
+}

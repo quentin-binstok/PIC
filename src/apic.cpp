@@ -547,6 +547,8 @@ int solver_apic(json &data, std::ofstream &log_file,
         // algorithm
         divergence(vx, vy, div, dom, speed_condition, log_file);
 
+        grid_to_particles(particles, dom, vx, vy, m, log_file);
+        
         if (thermal)
             grid_to_particles(particles, dom, vx, vy, m, log_file);
 

@@ -87,7 +87,7 @@ float energy(scalar_field *vx, scalar_field *vy);
 std::vector<float> slice_vertical(scalar_field *vx, int i_fixed, int j_start, int j_end) ;
 void write_metrics(std::ofstream& f, const Metrics& m);
 void write_header(std::ofstream& f, const std::vector<std::string>& headers);
-Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, scalar_field *vy, scalar_field *div, 
+Metrics compute_metrics(scalar_field *dom, scalar_field *p, scalar_field *vx, scalar_field *vy, scalar_field *div, scalar_field *T,
                             float dx, int step, int nt, int singularity, int solid_particles, int dirichlet, Metrics m, const json& metric_data, std::ofstream& log_file);
 std::vector<std::string> build_headers(const json& metric_data);
 

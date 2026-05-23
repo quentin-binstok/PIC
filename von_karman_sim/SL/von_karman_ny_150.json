@@ -1,18 +1,18 @@
 {
   "solver": "semi-lagrangian",
   "iteration_algo": "SOR",
-  "sampling_rate": 15,
+  "sampling_rate": 112,
   "log_file": "log.txt",
   "metrics_file": "metrics_APIC_VK.csv",
   "dir": "Von_Karman/SL/ny_150",
-  "flip": 1.0,
+  "flip": 0.0,
   "grid": [
-    300,
+    225.0,
     150
   ],
-  "space_steps": 0.02,
-  "nt": 750,
-  "delta_t": 0.01,
+  "space_steps": 0.006666666666666667,
+  "nt": 5624,
+  "delta_t": 0.0013333333333333335,
   "tol": 0.01,
   "max_iter": 100000.0,
   "rho": 1000.0,
@@ -22,7 +22,7 @@
     {
       "side": 0,
       "type": 3.0,
-      "speed_x": 5
+      "speed_x": 2.0
     },
     {
       "side": 1,
@@ -40,7 +40,7 @@
   "ic_cylinders": [
     {
       "center": [
-        50,
+        28,
         75
       ],
       "radius": 7
@@ -53,7 +53,7 @@
     {
       "header": "vx",
       "idx": [
-        225,
+        168.0,
         75
       ],
       "print": true
@@ -61,7 +61,7 @@
     {
       "header": "vy",
       "idx": [
-        225,
+        168.0,
         75
       ],
       "print": true
@@ -69,7 +69,7 @@
     {
       "header": "pressure",
       "idx": [
-        225,
+        168.0,
         75
       ],
       "print": true
@@ -77,9 +77,13 @@
     {
       "header": "aero_coefficients",
       "rho": 1000.0,
-      "U_inf": 1.5,
-      "A_ref": 0.3,
+      "U_inf": 2.0,
+      "A_ref": 0.1,
       "print": true
+    },
+    {
+      "header": "energy",
+      "print": false
     }
   ]
 }

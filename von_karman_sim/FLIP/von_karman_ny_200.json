@@ -1,18 +1,18 @@
 {
   "solver": "pic",
   "iteration_algo": "SOR",
-  "sampling_rate": 20,
+  "sampling_rate": 150,
   "log_file": "log.txt",
   "metrics_file": "metrics_APIC_VK.csv",
   "dir": "Von_Karman/FLIP/ny_200",
   "flip": 1.0,
   "grid": [
-    400,
+    300.0,
     200
   ],
-  "space_steps": 0.015,
-  "nt": 1000,
-  "delta_t": 0.0075,
+  "space_steps": 0.005,
+  "nt": 7500,
+  "delta_t": 0.001,
   "tol": 0.01,
   "max_iter": 100000.0,
   "rho": 1000.0,
@@ -22,7 +22,7 @@
     {
       "side": 0,
       "type": 3.0,
-      "speed_x": 5.0
+      "speed_x": 2.0
     },
     {
       "side": 1,
@@ -40,7 +40,7 @@
   "ic_cylinders": [
     {
       "center": [
-        66,
+        37,
         100
       ],
       "radius": 10
@@ -53,7 +53,7 @@
     {
       "header": "vx",
       "idx": [
-        300,
+        225.0,
         100
       ],
       "print": true
@@ -61,7 +61,7 @@
     {
       "header": "vy",
       "idx": [
-        300,
+        225.0,
         100
       ],
       "print": true
@@ -69,7 +69,7 @@
     {
       "header": "pressure",
       "idx": [
-        300,
+        225.0,
         100
       ],
       "print": true
@@ -77,8 +77,8 @@
     {
       "header": "aero_coefficients",
       "rho": 1000.0,
-      "U_inf": 5.0,
-      "A_ref": 0.3,
+      "U_inf": 2.0,
+      "A_ref": 0.1,
       "print": true
     },
     {
